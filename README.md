@@ -2,15 +2,16 @@
 
 ## Intro
 
-br2proj is an open-source utility for processing Bloodrayne 2 game files
+br2proj is a new, modern, and open-source utility for processing Bloodrayne 2 game files.
 
-This is implemented as an addon for Blender(tested only on 4.3).
+This is implemented as an addon for [Blender](https://www.blender.org). Tested only on Blender 4.3.
 
 Currently, it supports importing the following file formats:
 
 1. **TEX** – Uncompressed raster images.
 2. **SMB** – A format designed for storing 3D models. It turned out to be more complex than expected, as it includes animations and model variations at different levels of damage.
 3. **BFM(with SKB)** – A mainstream 3D data format that uses skeletal structures and skeletal animation. It also supports gap meshes-special meshes that cover joints when a character is dismembered.
+
 From now on, you can import these files directly into Blender!
 
 ## How to install?
