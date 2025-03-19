@@ -89,9 +89,9 @@ def transform_helper(cls=None, /, **kwargs):
 
     def _draw_transform_panel(self, context, layout:UILayout, id:str, text = "Transform"):
         header, body = layout.panel(id)
-        body.use_property_split = True
         header.label(text=text)
         if body:
+            body.use_property_split = True
             _draw_orientation_panel(self, context, body)
             body.prop(self, "global_scale")
             if apply_checkbox:
@@ -197,9 +197,9 @@ In any case, the name given in the materials section of the imported file has th
     def _draw_texture_panel(self, context, layout:UILayout, id:str):
         header, body = layout.panel(id)
         header.use_property_split = False
-        body.use_property_split = True
         header.prop(self, "use_textures")
         if body:
+            body.use_property_split = True
             body.enabled = self.use_textures
             self.draw_folder_picker("texture_path", context, body)
             body.prop(self, "texture_extensions")

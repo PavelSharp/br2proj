@@ -33,6 +33,7 @@ from . import bfm_imp
 
 @ui_decors.known_option('use_uv_coords', 'use_materials', 'use_custom_normals')
 class ImportBFM(Operator, ImportHelper):
+    """Load a Bloodrayne 2 BFM file"""
     bl_idname = "import_scene.br2bfm"
     bl_label = "Import BFM"
     bl_options = {'UNDO', 'PRESET'}
@@ -129,22 +130,11 @@ class ImportBFM(Operator, ImportHelper):
                 bfm.load(path)
             else:
                 self.report({'WARNING'}, f"File does not exist: {path}")
-
         return {'FINISHED'}
 
 
 def _menu_func_import(self, context):
     self.layout.operator(ImportBFM.bl_idname, text="Bloodrayne 2 BFM (.bfm)")
-
-
-
-class ImportTBFM(Operator):
-    bl_idname = "import_scene.test_br2bfm"
-    bl_label = "Import BFM"
-    bl_options = {'UNDO', 'PRESET'}
-    def execute(self, context):
-        bfm_imp.work()
-        return {'FINISHED'}
 
 
 def register():
@@ -154,5 +144,3 @@ def register():
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(_menu_func_import)
     bpy.utils.unregister_class(ImportBFM)
-
-

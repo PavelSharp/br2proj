@@ -2,7 +2,9 @@
 
 ## Intro
 
-br2pro is an open-source utility and an addon for Blender.
+br2proj is an open-source utility for processing Bloodrayne 2 game files
+
+This is implemented as an addon for Blender(tested only on 4.3).
 
 Currently, it supports importing the following file formats:
 
@@ -12,8 +14,10 @@ Currently, it supports importing the following file formats:
 From now on, you can import these files directly into Blender!
 
 ## How to install?
+Take a look at the `build.py`
 
 ## How is it developed?
+Visual Studio Code with [Blender Development](https://marketplace.visualstudio.com/items?itemName=JacquesLucke.blender-development)
 
 ## History
 Almost 20 years ago, PodTools was a popular tool, but unfortunately, its development stopped in 2006. Support for animations (.ani files) was never completed, and the source code remained closed.
@@ -29,3 +33,4 @@ Now, I’m thrilled to share my progress with you!
 ## TODO
 1. Animation import support (stored in .ani)
 2. Export of these formats as far-reaching plans
+3. Basic support for bloodrayne 1 as very far-reaching plans

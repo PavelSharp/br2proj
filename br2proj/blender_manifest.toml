@@ -1,8 +1,8 @@
 schema_version = "1.0.0"
 
 id = "io_br2proj"
-name = "Br2Proj"
 version = "1.0.0"
+name = "Br2Proj"
 tagline = "The extension adds support for Bloodrayne 2 game file formats"
 maintainer = "PavelSharp"
 type = "add-on"
@@ -31,9 +31,11 @@ files = "Import/export Bloodrayne 2 files from/to disk"
 
 # Optional: build settings.
 # https://docs.blender.org/manual/en/dev/advanced/extensions/command_line_arguments.html#command-line-args-extension-build
-# [build]
-# paths_exclude_pattern = [
-#   "__pycache__/",
-#   "/.git/",
-#   "/*.zip",
-# ]
+[build]
+paths_exclude_pattern = [
+   "__pycache__/",
+   "/.git/",
+   "/*.zip",
+   "/sandbox_bpy.py",
+   "/sandbox_py.py"
+]

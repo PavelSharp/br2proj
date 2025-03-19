@@ -1,0 +1,9 @@
+{
+    "blender.additionalArguments": [
+        "--app-template", "empty_scene" 
+    ],
+    "blender.addon.justMyCode": true,
+    "blender.addon.reloadOnSave": true,
+    "blender.addon.loadDirectory": "br2proj",
+    //"blender.addon.sourceDirectory": "br2proj"
+}

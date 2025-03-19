@@ -37,7 +37,7 @@ from .tex_imp import null_tex_provider
 #Поэтому стоит рассмотреть введение группировки по известным прификсам: part_, acc_, rayne_ и т.д.
 #acc - accessories
 #TODO исправить симметрию, ошибки который подтверждаются https://web.archive.org/web/20090411063619/http://www.bloodrayne2.ru/ru/bloodrayne2/gallery/3d-models.html
-#Видно, что аксессуар относится к правой ноге.
+#Видно, что аксессуар относится к правой ноге. Аналогично для модели RayneCOWGIRL
 #TODO FERRIL.BFM проблема с прозрачностью материалов
 
 class skb_provider:    

@@ -1,7 +1,6 @@
 #This work is based on the following documents
 #1.   BR2 3D FILE FORMATS DOCUMENT
 #     by BloodHammer (Mjolnir) (v1.19 - 15.01.2006)
-#     Thanks KillerExe for publishing it
 #Available at https://gamebanana.com/tools/18225 (Thanks KillerExe_01 for published it)
 #2.   https://suzerayne.weebly.com/
 #     which was published in January 2014.
