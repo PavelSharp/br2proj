@@ -41,14 +41,15 @@ from .tex_imp import null_tex_provider
 #TODO FERRIL.BFM проблема с прозрачностью материалов
 
 class skb_provider:    
-    def __init__(self, path:Path | str):
+    def __init__(self, path:Path | str, load_anims = False):
         self.path = path if isinstance(path, Path) else Path(path)
+        self.load_anims  = load_anims 
 
-    def provide(self, name:str, anims=False) -> SKB_File | None:
+    def provide(self, name:str) -> SKB_File | None:
         path = self.path / name
         if path.suffix.upper() == '.SKL': path = path.with_suffix('.SKB')
         with open(path, 'rb') as file:
-            return sern_read.reader(file).auto_read(SKB_File, anims)
+            return sern_read.reader(file).auto_read(SKB_File, self.load_anims )
 
 class LinkKinds(enum.Enum):
     AsIs = 0
@@ -235,10 +236,10 @@ class bfm_builder:
 
 @dataclass
 class bfm_importer:
+    skb_prov: skb_provider
     linker: bfm_linker = field(default_factory=bfm_linker)
     create_materials:bool = False
     tex_prov: null_tex_provider = field(default_factory=null_tex_provider)
-    skb_prov: skb_provider = field(default_factory=skb_provider)
     mesh_flags:MeshFlags = MeshFlags.ALL
     part_bound_boxes:ObjectLoadState = ObjectLoadState.NOT_LOAD
 

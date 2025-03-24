@@ -14,8 +14,16 @@ Currently, it supports importing the following file formats:
 
 From now on, you can import these files directly into Blender!
 
+And of course, feel free to open an issue. This is the place where you can share ideas for improvement as well as report any problems you encounter.
+
 ## How to install?
-Take a look at the `build.py`
+Open blender go to the `Scripting` tab, and just paste the contents of [build.py](https://github.com/PavelSharp/br2proj/blob/main/build.py), then click on the run button. Done.
+
+This is a fairly clever script that will download and install the latest version itself automatically. 
+
+You may need to enable “Allow Online Access” in `Edit`→`Preferences`→`System`, although my tests don't confirm this.  
+
+If any exceptions have been generated, going to `Windows`→`Toggle System Console` should give detailed information on the progress of the execution
 
 ## How is it developed?
 Visual Studio Code with [Blender Development](https://marketplace.visualstudio.com/items?itemName=JacquesLucke.blender-development)

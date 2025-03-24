@@ -42,15 +42,15 @@ class BFM_AttachedMesh:
 
 @dataclass
 class BFM_MeshDesc:
-    a:c_int32 #/? 3
+    version:c_int32 #3 [NEW 23.03.2025] (according to sub_723D90, it's called BonePacket)
     tpIndex:c_int32 #// texpack index
     #[14.03.2025] BR2 GOC, только ADZII.BFM имеет странный индекс материала -842150451
-    n1:c_int32 #//
+    n1:c_int32
     n1_data:list[c_int16] #// n1 * short: parts indices
     n2:c_int32
     n2_data:list[c_int16] #// n2 * short: indices of adjacent parts
     #[10.03.2025] Есть гипотеза, что n1=1 и n2=0 для обычных мэшей. Как только начинаются gap-мэши, эти значения могут указывать на "стыкове" сведения, между обычными мэшами
-    c:c_int32 #/? 2
+    version2:c_int32 #2 [NEW 23.03.2025] (according to sub_6BEEF0, it's called RenderPacket)
     datasize:c_int32 #// size of the vertex+triangle data for the mesh
     d:c_int32 #/? 4
     numVertices:c_int32
@@ -59,10 +59,10 @@ class BFM_MeshDesc:
     @classmethod
     def sern_read(cls, rdr:sern_read.reader):
         return  cls(**rdr.top_fields_read(cls, 
-                    'a', 'tpIndex', 
+                    'version', 'tpIndex', 
                     'n1', ('n1_data', sern_read.known_arg('n1')),
                     'n2', ('n2_data', sern_read.known_arg('n2')),
-                    'c',  'datasize', 'd',
+                    'version2',  'datasize', 'd',
                     'numVertices', 'numTriangles', 'numBones')
                 )
 

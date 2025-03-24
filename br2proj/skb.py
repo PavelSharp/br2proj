@@ -8,7 +8,7 @@ from dataclasses import dataclass
 #TODO .sern .sern.fixed_types
 from .sern import sern_read
 from .sern.fixed_types import *
-#from sern import jexplore
+#from .sern import jexplore
 
 @sern_read.fixeddata
 class SKB_Header:
@@ -25,56 +25,60 @@ class SKB_Bone:
 
 @dataclass
 class SKB_Anim:
-
     @sern_read.fixeddata
-    class SKB_Unk3:
-        a:c_int32
+    class SKB_Unk2:
+        a:c_int16
+        flag:c_int16
         b:c_int32
-
+    
     @sern_read.fixeddata
-    class SKB_Unk5:
+    class SKB_Unk4:
         a:c_int32
         b:c_float
         c:c_float
 
     name:ascii_char * 30
     path:ascii_char * 64
-
     a:c_float             #?? seems 30.0, 32.0, 
     numFrames:c_int32
     c:c_float           #0.1/0.3 -> frame duration, maybe? ??
     d:c_int32           #?? 0, -1, -2... 426?
     e:c_float           #?? less, but very close to numFrames !!! delta = f(d)
-    
+    f:c_int32
+
     i1:c_int32
+    i1_data:list[ascii_char * 64]
+
     i2:c_int32
-    i2_data:list[c_uint8] #vs char vs bytearray
+    i2_data:list[SKB_Unk2] #(kframe, smthn?)
+
     i3:c_int32
-    i3_data:list[SKB_Unk3] #(kframe, smthn?)	
-    i4:c_int32
-    i4_data:list[c_int32]
-    i5:c_float #TODO Why list length is float?
-    i5_data:list[SKB_Unk5]
+    i3_data:list[c_int32]
+    
+    i4:c_int32 #small inaccuracy in [BR2 3D FILE FORMATS DOCUMENT], should be int
+    i4_data:list[SKB_Unk4]
     @classmethod
     def sern_read(cls, rdr:sern_read.reader):
-        
-        dict = rdr.top_fields_read (cls, 'name', 'path', 'a', 'numFrames', 'c','d','e', 'i1')
+        dict = rdr.top_fields_read(cls, 'name', 'path', 
+                    'a', 'numFrames', 'c','d','e', 'f', 
+                    'i1', 
+                    ('i1_data', sern_read.known_arg('i1')),
+                    'i2',
+                    ('i2_data', sern_read.known_arg('i2')),
+                    'i3',
+                    ('i3_data', sern_read.known_arg('i3')),
+                    'i4',
+                    ('i4_data', sern_read.known_arg('i4')),  
+                    )
 
-        def step_read(f1, f1t, f2):
-            nonlocal cls,rdr,dict
-            val = rdr.auto_read(f1t)
-            print(f1, val)
-            dict[f1] = val
-            dict |= rdr.top_fields_read(cls, (f2, int(val)))
         
-        step_read('i2', c_int32, 'i2_data')
-        step_read('i3', c_int32, 'i3_data')
-        step_read('i4', c_int32, 'i4_data')
-        step_read('i5', c_float, 'i5_data')
-        #TODO crashed rayne.skl, on combo_up_kkk 
-        #jexplore.jprint(dict)
+        #See sub_722410 in Br2GOC for more details
+        #for i in range(dict['i2']):
+        #    val = dict['i2_data'][i]
+        #    if (val.flag==1):
+        #        dict['i2_data'][i] = {'a': val.a, 'flag':val.flag, 'b': dict['i1_data'][val.b]}
         return cls(**dict)
-    
+
 @dataclass
 class SKB_File:
     header:SKB_Header
@@ -84,19 +88,25 @@ class SKB_File:
     numAnims:c_int32
     anims:list[SKB_Anim]
     @classmethod
-    def sern_read(cls, rdr:sern_read.reader, enable_anims = True):
+    def sern_read(cls, rdr:sern_read.reader, load_anims = True):
         dict = rdr.top_fields_read(cls, 
                 'header',
                 ('bones', sern_read.known_arg('header').numBones),
                 'numFlags',
                 ('flags', sern_read.known_arg('numFlags')),
-                'numAnims',
             )
-        if enable_anims:
-            dict['anims'] = rdr.auto_read(list[SKB_Anim], dict['numAnims'])
+        if load_anims:
+            dict |= rdr.top_fields_read(cls, 
+                'numAnims',
+                ('anims', sern_read.known_arg('numAnims')))
         else:
-            dict['anims'] = 'disabled'
-
+            dict |= {'numAnims':0, 'anims':[]}
+        #jexplore.jprint(dict, path='test.json')
         return cls(**dict)
 
-		
+#Легкие анимации
+#Почти все неизвестные поля по нулям, это должен быть хороший знак для начала исследования этого формата
+#rayne.bfm -> 
+#   stand_alert.ani - базовая стойка
+#   walk_forward_start.ani
+#   run_start.ani

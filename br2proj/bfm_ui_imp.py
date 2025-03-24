@@ -101,7 +101,7 @@ class ImportBFM(Operator, ImportHelper):
                 self.report({'ERROR'}, f"Incorrect skb folder: {path}")
                 return None
         else: path =  Path(self.directory)
-        return bfm_imp.skb_provider(path)
+        return bfm_imp.skb_provider(path, load_anims=True)
 
 
 
@@ -117,10 +117,10 @@ class ImportBFM(Operator, ImportHelper):
         )
 
         bfm = bfm_imp.bfm_importer(
+            skb_prov=skb,
             linker=linker,
             create_materials=self.use_materials,
             tex_prov=tex,
-            skb_prov=skb,
             mesh_flags=bfm_imp.MeshFlags.from_bools(self.use_custom_normals, self.use_uv_coords)
         )        
 
