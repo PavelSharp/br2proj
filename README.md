@@ -18,7 +18,8 @@ And of course, feel free to open an issue. This is the place where you can share
 
 ## How to install?
 Open blender go to the `Scripting` tab, and just paste the contents of [build.py](https://github.com/PavelSharp/br2proj/blob/main/build.py), then click on the `run` button. Done.
-[Import Menu](https://github.com/PavelSharp/br2proj/blob/main/how_to_find.png)
+
+![Import Menu](https://github.com/PavelSharp/br2proj/blob/main/how_to_find.png)
 
 This is a fairly clever script that will download and install the latest version itself automatically. 
 You may need to enable `Allow Online Access` in `Edit`→`Preferences`→`System`, although my tests don't confirm this.  
