@@ -155,6 +155,7 @@ class reader:
             return obj.value
         return obj
 
+    #TODO Позволить конструктор из Path|str тогда открыть файл в бинарном режиме 
     def __init__(self, file):
         self.file = file
 

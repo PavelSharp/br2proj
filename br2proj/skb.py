@@ -17,7 +17,8 @@ class SKB_Header:
 
 @dataclass
 class SKB_Bone:
-    name:ascii_char * 28
+    name:ascii_char * 24
+    name_hash:c_uint32 #[NEW 27.03.2025] (according to sub_722EF0)
     parentBone:c_int32  #-1 for the root bone 
     symBone:c_int32     #symmetrical bone, -1 for the centric ones    
     matrix: (c_float*3)*3   #/? rotation? (what for?) determinants are 1...
@@ -38,7 +39,7 @@ class SKB_Anim:
         c:c_float
 
     name:ascii_char * 30
-    path:ascii_char * 64
+    ani_file_name:ascii_char * 64
     a:c_float             #?? seems 30.0, 32.0, 
     numFrames:c_int32
     c:c_float           #0.1/0.3 -> frame duration, maybe? ??
@@ -59,7 +60,7 @@ class SKB_Anim:
     i4_data:list[SKB_Unk4]
     @classmethod
     def sern_read(cls, rdr:sern_read.reader):
-        dict = rdr.top_fields_read(cls, 'name', 'path', 
+        dict = rdr.top_fields_read(cls, 'name', 'ani_file_name', 
                     'a', 'numFrames', 'c','d','e', 'f', 
                     'i1', 
                     ('i1_data', sern_read.known_arg('i1')),

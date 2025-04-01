@@ -34,6 +34,7 @@ from .tex_imp import null_tex_provider
 #TODO [СДЕЛАНО] Учеть что blender api предоставляет встроенные возможности по диалоговому интерфесу выбора базисных осей orientation_helper, axis_conversion из bpy_extras.io_utils
 #TODO Должен ли импорт SMB производится только в объектном режиме?
 #TODO FERRIL_TAT_TEST.SMB/FERRIL.BFM прозрачность верхних мэшей с татуировками отрабатывает неправильно
+#TODO Какая ориентация предполагалось для SMB? Нужен ли flip orient?
 
 class MeshFlags(enum.Flag):
     NONE = 0
@@ -416,6 +417,7 @@ class smb_importer:
 
 #weapons_rayne_blade_01.smd - содержит анимацию и не содержит эммитеров, неплохой вариант для изучения анимации
 #WW_BONE_CRUSHER_MAIN - особенно интересен с точки зрения анимации(ANI2BREAK.LVL)
+#VEHICLE_RYDER_ANIM - тоже анимации
 
 #Повреждения и анимация?
 #PARK_CHIPPER_ANIM.SMB

@@ -36,7 +36,7 @@ from .tex_imp import null_tex_provider
 #TODO подумать над префиксной группировкой. Дело в том, что мэши большинства моделей названы единообразны - начинаются на префикс part_ или acc_
 #Поэтому стоит рассмотреть введение группировки по известным прификсам: part_, acc_, rayne_ и т.д.
 #acc - accessories
-#TODO исправить симметрию, ошибки который подтверждаются https://web.archive.org/web/20090411063619/http://www.bloodrayne2.ru/ru/bloodrayne2/gallery/3d-models.html
+#TODO [СДЕЛАНО] исправить симметрию, ошибки который подтверждаются https://web.archive.org/web/20090411063619/http://www.bloodrayne2.ru/ru/bloodrayne2/gallery/3d-models.html
 #Видно, что аксессуар относится к правой ноге. Аналогично для модели RayneCOWGIRL
 #TODO FERRIL.BFM проблема с прозрачностью материалов
 
@@ -150,6 +150,7 @@ class _Armature:
 
 
 class bfm_builder:
+    bone_orient = Vector((0, 0, 1)) #only for tests in sandbox
     @staticmethod
     def build_material(pack:BFM_TexPack, tex_prov:null_tex_provider, name: str | None = None) -> bpy.types.Material: 
         return smb_builder.build_material(pack, tex_prov, name)
@@ -185,7 +186,7 @@ class bfm_builder:
             bpy_bone.head = parent_head+pos
             #qw = [Vector(bfm_bones.unkown[i].a), Vector(bfm_bones.unkown[i].b)]
             #bpy_utils.create_bound_box(bfm_bones.unkown[i], matryyyyyMatrix.Translation(bpy_bone.head) @ qw)
-            bpy_bone.tail = bpy_bone.head + (rot_mat @ Vector((0, 0, 1)) * 0.3)
+            bpy_bone.tail = bpy_bone.head + (rot_mat @ bfm_builder.bone_orient * 0.3)
             #bpy_bone.use_connect=True
             #bpy_bone.head =  parent_head + Vector(bfm_bones.pos[i])
             #bpy_bone.tail = bpy_bone.head + Vector((0,0.2,0))

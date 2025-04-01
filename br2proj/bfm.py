@@ -13,14 +13,14 @@ from .smb import SMB_TexPack
 
 @dataclass
 class BFM_Header:
-    version:c_int32
-    a:c_int32 #/? 1 always
+    version:c_int32 #6
+    lods:c_int32 #1 [NEW 25.03.2025] (according to sub_724100, but only 1 is supported.)
     numParts:c_int32
     numBones:c_int32
     numTexPacks:c_int32
     numAttachedMeshes: c_int32 #// like blades&guns
-    c:c_int32 #/? 1 always
-    d:c_int32 #/? 0 always
+    a:c_int32 #/? 1 always
+    b:c_int32 #/? 0 always
     skb_name: ascii_char * 80 #// SKB identifier
 
 #Переименовано в BMF_Part(имена этих объектов в моделях начинаются на part_ )
@@ -52,7 +52,7 @@ class BFM_MeshDesc:
     #[10.03.2025] Есть гипотеза, что n1=1 и n2=0 для обычных мэшей. Как только начинаются gap-мэши, эти значения могут указывать на "стыкове" сведения, между обычными мэшами
     version2:c_int32 #2 [NEW 23.03.2025] (according to sub_6BEEF0, it's called RenderPacket)
     datasize:c_int32 #// size of the vertex+triangle data for the mesh
-    d:c_int32 #/? 4
+    vertex_type:c_int32 #4 [NEW 25.03.2025] (according to sub_6BEFE0, but bfm only use type 4)
     numVertices:c_int32
     numTriangles:c_int32
     numBones:c_int32 #// why here?
@@ -62,7 +62,7 @@ class BFM_MeshDesc:
                     'version', 'tpIndex', 
                     'n1', ('n1_data', sern_read.known_arg('n1')),
                     'n2', ('n2_data', sern_read.known_arg('n2')),
-                    'version2',  'datasize', 'd',
+                    'version2',  'datasize', 'vertex_type',
                     'numVertices', 'numTriangles', 'numBones')
                 )
 

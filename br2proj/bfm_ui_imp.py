@@ -24,7 +24,7 @@ from . import bpy_utils
 from . import ui_decors
 from . import bfm_imp
 
-@ui_decors.transform_helper(axis_forward='-Z', axis_up='Y')
+@ui_decors.transform_helper(axis_forward='Z', axis_up='Y')
 @ui_decors.texture_helper
 @ui_decors.folder_picker(access_name='skb_path', ui_name='SKB Folder', description=
     """Any BFM file link to the SKB skeleton file.

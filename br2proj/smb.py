@@ -36,7 +36,7 @@ class SMB_TexPack:
     c: c_int32 # ?? 0
     glossCode: c_int32 # /? 0 [BFM] unique ID: maybe glosses are precached somewhere
     glossmap: ascii_char * 64
-    
+    #see sub_5CD040
     indxs: c_float * 32   # ?? 0's and 1's, mostly the same pattern
         
     i: c_int32  # ?? 1
@@ -69,9 +69,9 @@ class SMB_MeshHeader:
     tpIndex: c_int16 #2 byte int texpack index
     b: c_int32
     box: box3d #[Verified. It's bound box]
-    c: c_int32 #?? 2?
+    version2: c_int32 #2 [NEW 25.03.2025] This is the same version as in bfm
     datasize: c_int32 # size of the vertex+triangle data for the mesh
-    d: c_int32 #?? 6?
+    vertex_type: c_int32 #4 [NEW 25.03.2025] (according to sub_6BEFE0, but smb only use type 6)
     numVertices: c_int32
     numTriangles: c_int32
     e: c_float #?? 0?		

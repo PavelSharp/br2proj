@@ -6,7 +6,6 @@ import mathutils
 
 from bpy_extras.io_utils import (
     orientation_helper,
-    axis_conversion,
 )
 from bpy.props import (
     BoolProperty,
@@ -15,6 +14,7 @@ from bpy.props import (
 )
 
 from . import tex_imp
+from .bpy_utils import axis_conversion
 
 
 def button_operator(*, doc_str:str, bl_idname: str, bl_label: str):
@@ -47,6 +47,17 @@ def button_operator(*, doc_str:str, bl_idname: str, bl_label: str):
 
 def transform_helper(cls=None, /, **kwargs):
     if cls is None: return lambda cls: transform_helper(cls, **kwargs)
+    
+    def unpack_checkbox(val, dflt:bool):
+        if isinstance(val, bool):
+            return val, dflt
+        
+        if not isinstance(val, tuple) or not all(isinstance(v, bool) for v in val):
+            raise ValueError(f'Unkown type for unpack, type was {type(val)}')
+        return val
+    
+    orient_checkbox, orient_default = unpack_checkbox(kwargs.pop('orient_checkbox', True), True)
+
     apply_checkbox = kwargs.pop("apply_checkbox", False)
     transform_panel_id = kwargs.pop("transform_panel_id", None)
 
@@ -58,6 +69,13 @@ def transform_helper(cls=None, /, **kwargs):
         description="Specify the manual orientation, instead of using native one",
         default=True,
     )
+
+    if orient_checkbox:
+        anno['use_flip_orient'] = BoolProperty(
+            name='Flip Orientation',
+            description='Switch between left-handed and right-handed coordinate systems',
+            default=orient_default,
+        )
 
     if apply_checkbox:
         anno["use_apply_matrix"] = BoolProperty(
@@ -73,7 +91,7 @@ def transform_helper(cls=None, /, **kwargs):
         default=1.0,
     )
 
-    def _draw_orientation_panel(self, context, layout):
+    def draw_orientation_panel(self, context, layout):
         if transform_panel_id is not None: 
             header, body = layout.panel(transform_panel_id)
         else:
@@ -86,26 +104,29 @@ def transform_helper(cls=None, /, **kwargs):
             body.enabled = self.use_manual_orientation
             body.prop(self, "axis_forward")
             body.prop(self, "axis_up")
+            body.prop(self, "use_flip_orient")
 
-    def _draw_transform_panel(self, context, layout:UILayout, id:str, text = "Transform"):
+
+    def draw_transform_panel(self, context, layout:UILayout, id:str, text = "Transform"):
         header, body = layout.panel(id)
         header.label(text=text)
         if body:
             body.use_property_split = True
-            _draw_orientation_panel(self, context, body)
+            draw_orientation_panel(self, context, body)
             body.prop(self, "global_scale")
             if apply_checkbox:
                 body.prop(self, "use_apply_matrix")
 
-    def _get_transform_matrix(self):
+    def get_transform_matrix(self):
         rot = mathutils.Matrix()
         if self.use_manual_orientation:
-            rot = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
+            flip = self.use_flip_orient if orient_checkbox else orient_default 
+            rot = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up, change_orient=flip).to_4x4()
         matr = rot @ mathutils.Matrix.Scale(self.global_scale, 4)
         return (self.use_apply_matrix, matr) if apply_checkbox else matr
         
-    cls.draw_transform_panel = _draw_transform_panel
-    cls.get_transform_matrix = _get_transform_matrix
+    cls.draw_transform_panel = draw_transform_panel
+    cls.get_transform_matrix = get_transform_matrix
     return cls
 
 
@@ -175,7 +196,7 @@ Note. Paste path or leave it empty to use the path to the model"""
     anno["use_textures"] = BoolProperty(
         name="Load textures",
         description="Enable texture loading",
-        default=True,
+        default=False,
     )
 
     def norm_exts(exts:str):
