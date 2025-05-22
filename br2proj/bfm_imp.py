@@ -48,8 +48,7 @@ class skb_provider:
     def provide(self, name:str) -> SKB_File | None:
         path = self.path / name
         if path.suffix.upper() == '.SKL': path = path.with_suffix('.SKB')
-        with open(path, 'rb') as file:
-            return sern_read.reader(file).auto_read(SKB_File, self.load_anims )
+        return sern_read.reader.read_all(path, SKB_File, self.load_anims, must_eof=self.load_anims)
 
 class LinkKinds(enum.Enum):
     AsIs = 0
@@ -146,11 +145,13 @@ _BoneDict = dict[int, dict[float, list[int]]]
 class _Armature:
     arm_obj: bpy.types.Object
     bone_names: list[str] = field(init=False, default_factory=list)
-    def bone_name(self, ind:int): return self.bone_names[ind]
+    def bone_name(self, ind:int): 
+        print(ind,'<-here')
+        return self.bone_names[ind]
 
 
 class bfm_builder:
-    bone_orient = Vector((0, 0, 1)) #only for tests in sandbox
+    bone_orient = Vector((0, 0, 1)) #TODO only for tests in sandbox
     @staticmethod
     def build_material(pack:BFM_TexPack, tex_prov:null_tex_provider, name: str | None = None) -> bpy.types.Material: 
         return smb_builder.build_material(pack, tex_prov, name)

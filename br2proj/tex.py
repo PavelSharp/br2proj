@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from os import SEEK_CUR
 from typing import Callable
 
 import numpy as np
@@ -45,7 +44,7 @@ TEXMipChoicer = Callable[['TEX_Header', int], MipLoadState | bool] | int | None
 
 @dataclass
 class TEX_Header:
-    version: c_int32
+    version: c_int32 #3 for br2 
     format: TexFormats
     width: c_int32
     height: c_int32
@@ -75,6 +74,7 @@ class TEX_Header:
             return np.fromfile(rdr.file, dtype = pixel_type, count = self.mipmap_size(i))
 
         def skip(i): 
+            from os import SEEK_CUR
             rdr.file.seek(self.mipmap_size(i)*np.dtype(pixel_type).itemsize, SEEK_CUR)
             return None
 

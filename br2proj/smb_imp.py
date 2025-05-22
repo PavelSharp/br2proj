@@ -78,9 +78,8 @@ class smb_builder:
                 file = Path(file)
             if isinstance(file, Path):
                 name = file.stem
-                with open(file, 'rb') as input:
-                    file = sern_read.reader(input).auto_read(typ)
-                    #if input.read(1) != '': print('ERR')
+                file = sern_read.reader.read_all(file, typ)
+                #if input.read(1) != '': print('ERR')
         if not isinstance(file, typ) or not isinstance(name, str):
             raise TypeError(f'Unkown type for {typ}, type was {src_type.__name__}')
         return file, name

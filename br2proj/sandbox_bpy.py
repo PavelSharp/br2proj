@@ -25,10 +25,10 @@ from typing import Tuple
 
 
 def _work():
-    bfm_imp.bfm_builder.bone_orient = Vector((1,0,0))
+    bfm_imp.bfm_builder.bone_orient = Vector((1,0,0)) #TODO Delete it as soon as I can
     tex_prov = tex_imp.tex_provider('D:\Games\Bloodrayne 2_min\ART')
     #phonemes, RUN_FORWARD STAND_ALERT locked_idle
-    with open('D:/Games/Bloodrayne 2_min/ANIMATIONS/RAYNE/RUN_FORWARD.ani', 'rb') as file:
+    with open('D:/Games/Bloodrayne 2_min/ANIMATIONS/RAYNE/STAND_ALERT.ani', 'rb') as file:
         ani:ANI_File = sern_read.reader(file).auto_read(ANI_File)
         #jexplore.jprint(dict, path = "D:/br2dec/blender/br2proj/alert.json")
 
@@ -76,7 +76,7 @@ def _work():
         #        return str(rayne_skb.bones[bone.symBone].name)
         return name
 
-
+    #[24.04.2025, IMPORTANT] See Nocturne/Editor/doc/Editor.pdf Coordinate System for more details about it
     for ani_bone in ani.used_bones:
         tt = ani_bone.tt
         bpy_bone = arm.pose.bones[sym(str(ani_bone.name))]

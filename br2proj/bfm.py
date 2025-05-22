@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from .sern import sern_read
 from .sern.fixed_types import *
+#from .sern import jexplore
 from .smb import SMB_TexPack
 
 @dataclass
@@ -100,9 +101,13 @@ class BFM_Bones:
 class BFM_MeshGeometry:
     vertices: list[BFM_Vertex] #TODO переименовать в points как в smb
     triangles: list[triangle]
+    align: bytes #Special member for xbox
     @classmethod
-    def sern_read(cls, rdr:sern_read.reader, verts:int, trins:int):
-        return cls(**rdr.top_fields_read(cls, ('vertices', verts),  ('triangles', trins)))
+    def sern_read(cls, rdr:sern_read.reader, verts:int, trins:int, datasize:int):
+        pos = rdr.file.tell()
+        dict = rdr.top_fields_read(cls, ('vertices', verts),  ('triangles', trins))
+        dict['align'] = rdr.file.read(datasize-(rdr.file.tell()-pos))
+        return cls(**dict)
 
 #GapMesh - это мэши расположенные на месте сочлинения конечностей, невидимые.
 #Текстурирование не правильное. Вероятно, выполняют служебную роль
@@ -134,6 +139,8 @@ class BFM_File:
                 ('mesh_descs', sern_read.known_arg('total_meshes')),
                 'align',
             )
-        geom = lambda dc: rdr.auto_read(BFM_MeshGeometry, (dc.numVertices, dc.numTriangles))
+        #ps2 crash here. Geometry can use compression, in which real numbers are encoded as uint16. But the size of the vertices is variable
+        geom = lambda dc: rdr.auto_read(BFM_MeshGeometry, (dc.numVertices, dc.numTriangles, dc.datasize))
         dict['geometry'] = [geom(desc) for desc in dict['mesh_descs']]
+        #jexplore.jprint(dict, path = 'xbx_rayne.json')
         return cls(**dict)

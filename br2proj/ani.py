@@ -47,9 +47,6 @@ class ANI_File:
                 ('used_bones', sern_read.known_arg('header').numBonesUsed),
                 'a', 'b',
                 ('unk1', sern_read.known_arg('header').numBonesUsed2))
-        
-        c = rdr.file.read(1)
-        if c!=b'': raise ValueError(f'END NOT REACHED, pos:{rdr.file.tell()} ')
         return cls(**dict)
 
 #Присутсвует ANI_BoneEntry2

@@ -1,3 +1,4 @@
+from pathlib import Path
 import dataclasses
 from dataclasses import dataclass, fields
 
@@ -134,6 +135,17 @@ known_arg = _top_fields_known_arg
 class reader:
     @staticmethod
     def has_sern_read(typ): return callable(getattr(typ, "sern_read", None))
+    
+    @classmethod
+    def read_all(cls, path:Path | str, typ, *args, must_eof=True):
+        with open(path, 'rb') as file:
+            res = cls(file).auto_read(typ, args)
+            if must_eof and ((pos := file.tell()) or True) and file.read(1) != b'':
+                from warnings import warn
+                warn(f"EOF has not been reached. File: {path}, pos: {pos}", BytesWarning)
+                #file.seek(pos) #It's not necessary
+            return res
+        
     @staticmethod
     def map_fixed_type(obj):
         #if _unmapped_type_support.is_marked(type(obj)): return obj
@@ -156,7 +168,7 @@ class reader:
         return obj
 
     #TODO Позволить конструктор из Path|str тогда открыть файл в бинарном режиме 
-    def __init__(self, file):
+    def __init__(self, file:typing.IO[bytes]):
         self.file = file
 
     #fields is tuple(E1, E2, ...),

@@ -1,5 +1,25 @@
-import sys
-sys.path.append("D:/br2dec/blender/br2proj/sern")
+def prepare_module(name:str):
+    from types import ModuleType
+    from sys import modules
+    from pathlib import Path
+    mod = ModuleType(name)
+    mod.__path__ =  [str(Path(__file__).parent / name)]
+    modules[name] = mod
+prepare_module('br2proj')
+
+from br2proj import skb, bfm
+from br2proj.sern import sern_read, jexplore
+
+
+bf = sern_read.reader.read_all(
+    "D:\Games\Bloodrayne 2_min\MODELS\RAYNE.BFM", 
+    bfm.BFM_File)
+
+jexplore.jprint(bf, path='D:/br2dec/blender/br2proj/bfmdel.json')
+
+
+'''
+
 
 import sern.jexplore
 import skb
@@ -7,7 +27,6 @@ import sern
 from sern import sern_read
 from sern import jexplore
 from sern.fixed_types import *
-import skb
 import bfm
 from dataclasses import dataclass
 
@@ -19,6 +38,7 @@ with open("D:\Games\Bloodrayne 2_min\MODELS\RAYNE.BFM", 'rb') as file:
 
     sern.jexplore.jprint(bf, path='D:/br2dec/blender/br2proj/bfmdel.json')
     pass
+'''
 
 '''
 with open("D:\Games\Bloodrayne 2_min\DATA\RAYNE.SKB", 'rb') as file:

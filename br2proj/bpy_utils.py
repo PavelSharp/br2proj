@@ -69,10 +69,7 @@ def axis_conversion(from_forward='Y', from_up='Z', to_forward='Y', to_up='Z', ch
         sig2, i2 = up  
         sig, res  = mul_dict[(i1,i2)]
         return sig1*sig2*sig, res
-
-    if from_forward[-1] == from_up[-1] or to_forward[-1] == to_up[-1]:
-        raise ValueError('Axis conflict detected')
-
+    
     ret = Matrix(((0,0,0), (0,0,0), (0,0,0)))
     def add(v1, v2):
         sig1, i1 = parse(v1)
@@ -83,6 +80,9 @@ def axis_conversion(from_forward='Y', from_up='Z', to_forward='Y', to_up='Z', ch
     from_forward, to_forward = add(from_forward,to_forward)
     from_up, to_up = add(from_up,to_up)
     
+    if from_forward[1] == from_up[1] or to_forward[1] == to_up[1]:
+        raise ValueError('Axis conflict detected')
+
     sig1, i1 = find_basis(from_forward, from_up)
     sig2, i2 = find_basis(to_forward, to_up)
     ret[i2][i1] = (-1 if change_orient else 1)*sig1*sig2

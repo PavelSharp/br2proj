@@ -34,8 +34,7 @@ class tex_importer:
                 tex = Path(tex)
             if isinstance(tex, Path):
                 name = tex.name if self.with_ext else tex.stem
-                with open(tex, 'rb') as file:
-                    tex = sern_read.reader(file).auto_read(TEX_File, self.mif)
+                tex = sern_read.reader.read_all(tex, TEX_File, self.mif)
         if not isinstance(tex, TEX_File) or not isinstance(name, str):
             raise TypeError(f'Unkown type for tex, type was {src_type.__name__}')
         return tex, name

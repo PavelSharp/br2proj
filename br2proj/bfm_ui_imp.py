@@ -101,7 +101,7 @@ class ImportBFM(Operator, ImportHelper):
                 self.report({'ERROR'}, f"Incorrect skb folder: {path}")
                 return None
         else: path =  Path(self.directory)
-        return bfm_imp.skb_provider(path, load_anims=True)
+        return bfm_imp.skb_provider(path, load_anims=False) #Disabling animation loading so that there are no problems when reading other platforms.
 
 
 
@@ -109,6 +109,10 @@ class ImportBFM(Operator, ImportHelper):
         #TODO[Сделано] если Use Collection true то связывать надо со сценовой коллекцией а не с активной
         if not (tex:=self.get_texture_provider(context)): return {'CANCELLED'}
         if not (skb:=self.get_skb_provider()): return {'CANCELLED'}
+
+        from mathutils import Vector
+        bfm_imp.bfm_builder.bone_orient = Vector((0,0,1)) #TODO Delete it as soon as I can
+
         linker = bfm_imp.bfm_linker(
                         bfm_imp.LinkKinds.bool_to_collection(self.use_collection),
                         grouping=self.use_groups, 
