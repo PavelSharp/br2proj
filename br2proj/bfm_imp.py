@@ -146,7 +146,6 @@ class _Armature:
     arm_obj: bpy.types.Object
     bone_names: list[str] = field(init=False, default_factory=list)
     def bone_name(self, ind:int): 
-        print(ind,'<-here')
         return self.bone_names[ind]
 
 
