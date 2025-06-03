@@ -72,14 +72,10 @@ class ImportSMB(Operator, ImportHelper):
     )
 
     use_bound_boxes:BoolProperty(
-            name="Bound boxes",
-            description="Import bound boxes from file",
+            name='Bound boxes',
+            description='Import bound boxes from file',
             default=False,
     )
-
-    #use_uv_coords:ui_decors.known_option('use_uv_coords')
-    #use_materials:ui_decors.known_option('use_materials')
-    #use_custom_normals: ui_decors.known_option('use_custom_normals')
 
     use_collision_meshes:BoolProperty(
             name="Collision meshes",
@@ -87,6 +83,19 @@ class ImportSMB(Operator, ImportHelper):
 Note. If imported then the meshes will be hidden for convenience""",
             default=True,
     )
+
+    use_emitters:BoolProperty(
+            name='Emitters',
+            description='Emitters are just points in space that perform a service role. Enable this to import them',
+            default=True,
+    )
+
+    use_animations:BoolProperty(
+            name='Animations',
+            description="""Some files include per-frame transformations (quaternion + position).
+Enable this to import animation. This will be available as an action""",
+            default=True,
+    )    
 
     def validate(self):
         if self.top_container == 'EMPTY' and self.group_container == 'COLLECTION':
@@ -98,26 +107,28 @@ Note. If imported then the meshes will be hidden for convenience""",
         layout = self.layout
         layout.use_property_split = True
 
-        header, body = self.layout.panel("BR2PROJ_import_creatation")
-        header.label(text="Creatation")
+        header, body = self.layout.panel('BR2PROJ_import_creatation')
+        header.label(text='Creatation')
         if body:
-            body.prop(self, "top_container")
-            body.prop(self, "group_container")
+            body.prop(self, 'top_container')
+            body.prop(self, 'group_container')
             if err:=self.validate(): layout.label(text=err, icon='ERROR')
 
-        header, body = self.layout.panel("BR2PROJ_import_include")    
-        header.label(text="Include")
+        header, body = self.layout.panel('BR2PROJ_import_include', default_closed=True)
+        header.label(text='Include')
         if body:
-                #body.use_property_split = False
-                self.draw_icon_checkbox(context, body, 'use_bound_boxes', 'MESH_CUBE')
-                self.draw_icon_checkbox(context, body, 'use_collision_meshes', 'MOD_PHYSICS')
-                self.draw_known_options(context, body)
-                #TODO body.prop(self, "use_custom_normals")
-                #body.prop(self, "use_uv_coords")
-                #body.prop(self, "use_materials")
+            #body.use_property_split = False
+            self.draw_icon_checkbox(context, body, 'use_bound_boxes', 'MESH_CUBE')
+            self.draw_icon_checkbox(context, body, 'use_collision_meshes', 'MOD_PHYSICS')
+            self.draw_known_options(context, body)
+            self.draw_icon_checkbox(context, body, 'use_emitters', 'EMPTY_AXIS')
+            self.draw_icon_checkbox(context, body, 'use_animations', 'ANIM')
+            #TODO body.prop(self, "use_custom_normals")
+            #body.prop(self, "use_uv_coords")
+            #body.prop(self, "use_materials")
 
-        self.draw_texture_panel(context, layout, "BR2PROJ_import_textures")
-        self.draw_transform_panel(context, layout, "BR2PROJ_import_transform")
+        self.draw_texture_panel(context, layout, 'BR2PROJ_import_textures')
+        self.draw_transform_panel(context, layout, 'BR2PROJ_import_transform')
 
 
 
@@ -158,9 +169,11 @@ Note. If imported then the meshes will be hidden for convenience""",
             name_groups=name_groups,
             create_materials=self.use_materials,
             tex_prov=prov,
+            anim_prov= smb_imp.smb_action_provider() if self.use_animations else None,
             mesh_flags=smb_imp.MeshFlags.from_bools(self.use_custom_normals, self.use_uv_coords),
             collisions=smb_imp.ObjectLoadState.bool_to_hide(self.use_collision_meshes),
-            bound_boxes=smb_imp.ObjectLoadState.bool_to_normal(self.use_bound_boxes)
+            bound_boxes=smb_imp.ObjectLoadState.bool_to_normal(self.use_bound_boxes),
+            emitters=smb_imp.ObjectLoadState.bool_to_normal(self.use_emitters)
         )
 
         for file in self.files:

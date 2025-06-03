@@ -17,8 +17,10 @@ class SMB_Header:
     numCollisionMeshes: c_int32
     numEmitters: c_int32 #/?
     numTexPack: c_int32
-    a: c_int32 #?? length of additional data per mesh/cmesh/emmiter
-    fps: c_float #30.0 NTSC fps?    
+    numFrames: c_int32 #[NEW 30.05.2025] (it's just a number of frames)
+    fps: c_float #30.0 NTSC fps?
+    @property
+    def is_animated(self): return self.numFrames>1 or self.numEmitters>0
 
 @dataclass
 class SMB_TexPack:
@@ -46,30 +48,30 @@ class SMB_TexPack:
 @dataclass
 class SMB_CollisionMesh:
     name: ascii_char * 32
-    b: c_int32 #?? 2?
+    version: c_int32 #3 [NEW 29.05.2025] (according to sub_60E820) (small inaccuracy in [BR2 3D FILE FORMATS DOCUMENT], should be 3, not 2)
     numVertices: c_int32
     numTriangles: c_int32
     
     points: list[point3f]
     triangles: list[triangle]
-    unkown: bytearray
+    unknown: bytearray # Per-triangle material or collision flag
     
     @classmethod
     def sern_read(cls, rdr:sern_read.reader):
         return  cls(**rdr.top_fields_read(cls, 
-                    'name', 'b', 'numVertices', 'numTriangles',
+                    'name', 'version', 'numVertices', 'numTriangles',
                     ('points', sern_read.known_arg('numVertices')),
                     ('triangles', sern_read.known_arg('numTriangles')),
-                    ('unkown', sern_read.known_arg('numTriangles'))
+                    ('unknown', sern_read.known_arg('numTriangles'))
                 ))
 
 @dataclass
 class SMB_MeshHeader:
     name: ascii_char * 32
     tpIndex: c_int16 #2 byte int texpack index
-    b: c_int32
+    version: c_int32 ##2 [NEW 28.05.2025] (according to sub_60FB20, it's part of CMesh::loadHeader)
     box: box3d #[Verified. It's bound box]
-    version2: c_int32 #2 [NEW 25.03.2025] This is the same version as in bfm
+    version2: c_int32 #2 [NEW 25.03.2025] Just like in bfm (according to sub_6BEEF0, it's called RenderPacket)
     datasize: c_int32 # size of the vertex+triangle data for the mesh
     vertex_type: c_int32 #4 [NEW 25.03.2025] (according to sub_6BEFE0, but smb only use type 6)
     numVertices: c_int32
@@ -96,35 +98,33 @@ class SMB_Mesh:
     @classmethod
     def sern_read(cls, rdr:sern_read.reader, info: SMB_MeshHeader):
         return cls(**rdr.top_fields_read(cls, 
-                        ("points", info.numVertices), 
-                        ("triangles", info.numTriangles)))
+                        ('points', info.numVertices), 
+                        ('triangles', info.numTriangles)))
 
-@sern_read.fixeddata
-class SMB_Emitter:
-    unkown: c_uint8 * 32
+SMB_Emitter = ascii_char * 32
+
+#TODO[IMPORTANT] Must be @sern_read.fixeddata (check the correctness with smb_action_provider)
+@dataclass
+class SMB_Transform:
+    quat:quaternion
+    pos:point3f
+    def sern_jwrite(self): return [list(self.quat), list(self.pos)]
+    def __len__(self): return 7
+    def __getitem__(self, n): return self.quat[n] if n<4 else self.pos[n-4]
 
 @dataclass
-class SMB_UnkownData:
-    for_mesh:list[c_uint16]
-    for_cmesh:list[c_uint16]
-    for_emmit:list[c_uint16]
-
-    for_mesh2:list[list[c_float * 7]]
-    for_cmesh2:list[list[c_float * 7]]
-    for_emmit2:list[list[c_float * 7]]
-    #[17.02.2025] header.a - количесвто кадров, c_float * 7 - описатель кадра(трансформация) ???
+class SMB_Animation:
+    #[31.05.2025] Может быть, мндексы связаны с уровнем повреждения
+    unk:list[c_uint16]
+    frames:list[list[SMB_Transform]] #According to sub_60FB20, engine reads it as 16+12
+    #[17.02.2025] header.a - количесвто кадров, c_float * 7 - описатель кадра(трансформация) [28.05.2025, Подтверждено]
     @classmethod
     def sern_read(cls, rdr:sern_read.reader, hdr:SMB_Header):
-        if hdr.a>1 or hdr.numEmitters>1 or (hdr.numEmitters == hdr.a == 1):
-            return cls(**rdr.top_fields_read(cls, 
-                    ('for_mesh', hdr.numMeshes),
-                    ('for_cmesh', hdr.numCollisionMeshes),
-                    ('for_emmit', hdr.numEmitters),
-                    ('for_mesh2', hdr.numMeshes, hdr.a),
-                    ('for_cmesh2', hdr.numCollisionMeshes, hdr.a),
-                    ('for_emmit2', hdr.numEmitters, hdr.a)))
-        else:
-            return cls([],[],[],[],[],[])
+        if not hdr.is_animated: return cls([],[])
+        cnt = hdr.numMeshes+hdr.numCollisionMeshes+hdr.numEmitters
+        return cls(**rdr.top_fields_read(cls, 
+                    ('unk', cnt),
+                    ('frames', hdr.numFrames, cnt)))
 
 @dataclass
 class SMB_File:    
@@ -134,7 +134,7 @@ class SMB_File:
     emitters: list[SMB_Emitter]
     box: box3d #[Verified. It's bound box for whole model]
     mesh_header: list[SMB_MeshHeader]
-    unkown: SMB_UnkownData
+    animation: SMB_Animation
     align: align16
     meshes: list[SMB_Mesh]
     #[17.02.2025] Проверено. Недочитанных данных не остается 
@@ -148,12 +148,29 @@ class SMB_File:
                 ('emitters', hdr.numEmitters),
                 'box',
                 ('mesh_header', hdr.numMeshes),
-                ('unkown', hdr),
+                ('animation', hdr),
+                #*([('animation', hdr)] if hdr.is_animated else []),
                 'align',
                 )
-
+        #if not hdr.is_animated: dict['animation'] = None
         mesh_hdrs = dict['mesh_header']
         read_mesh = lambda i: rdr.auto_read(SMB_Mesh, mesh_hdrs[i])
         dict['meshes'] = [read_mesh(i) for i in range(hdr.numMeshes)]
 
         return cls(**dict)
+    
+#All knowm emitters (founded by scanning all games files[GOG])
+#Base base Tip tip Handle 
+#blade effect gunR lasersight lightpos male female
+#Target taget target target01
+#muzzle1 muzzle2
+#particle particle01 particle02 particle03 particle04 particle05
+#particle06 particle07 particle08 particle09 particle10 paticle01
+#sparks sword 
+
+#Практическое подтверждение
+#Прим. ллюбой регистор написания эмитерров
+#1)Если smb модель используется как CAniModel, то очень вероятно эмитторы игнорируются
+#2)Если smb модель используется как CImpaler(в файле .LVL) и секция эмиттеров
+#не содержит пару: 'tip' и 'base' -> критическая ошибки:
+#'Model %s doesn't have a 'tip' part.', 'Model %s doesn't have a 'base' part.'

@@ -45,10 +45,11 @@ class skb_provider:
         self.path = path if isinstance(path, Path) else Path(path)
         self.load_anims  = load_anims 
 
-    def provide(self, name:str) -> SKB_File | None:
+    def provide(self, name:str, ret_path = False) -> SKB_File | tuple[SKB_File, Path]:
         path = self.path / name
         if path.suffix.upper() == '.SKL': path = path.with_suffix('.SKB')
-        return sern_read.reader.read_all(path, SKB_File, self.load_anims, must_eof=self.load_anims)
+        skb = sern_read.reader.read_all(path, SKB_File, self.load_anims, must_eof=self.load_anims)
+        return (skb, path) if ret_path else skb
 
 class LinkKinds(enum.Enum):
     AsIs = 0
@@ -129,7 +130,7 @@ class bfm_linker:
 
 
         self._base_link(bpy_obj, coll)
-        bpy_utils.origin_to_geometry(bpy_obj)
+        #bpy_utils.origin_to_geometry(bpy_obj)
 
         def on_asis(): bpy_obj.matrix_world = self.transform
         def on_collection(): bpy_obj.matrix_world = self.transform
@@ -256,7 +257,7 @@ class bfm_importer:
         skb = self.skb_prov.provide(str(bfm.header.skb_name))
         self.linker.new_container(top_name) #, (str(part.name) for part in bfm.parts)
 
-        arm = bfm_builder.build_armature('!arm'+top_name, bfm.bones, skb.bones)
+        arm = bfm_builder.build_armature('arm'+top_name, bfm.bones, skb.bones)
         self.linker.link(bpy_utils.unlink_from_all(arm.arm_obj), allow_group=False)
 
         bpy_mats = self.build_bpy_mats(bfm.text_packs)
@@ -272,7 +273,7 @@ class bfm_importer:
             bfm_builder.apply_armature(bpy_obj, bone_dict, arm)
             if self.create_materials:
                 tp_ind = desc.tpIndex
-                if tp_ind==-842150451 or tp_ind==261674992: tp_ind=0 #adzii.bfm case (goc and 2020)
+                if tp_ind==-842150451 or tp_ind==261674992: tp_ind=0 #adzii.bfm case (gog and 2020)
                 bpy_obj.data.materials.append(bpy_mats[tp_ind])
             
             self.linker.link(bpy_obj)

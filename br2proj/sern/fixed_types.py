@@ -53,6 +53,16 @@ class point3f(c_float * 3):
     @property
     def z(self): return self[2]
 
+class quaternion(c_float*4):
+    @property
+    def w(self): return self[0]
+    @property
+    def x(self): return self[1]
+    @property
+    def y(self): return self[2] 
+    @property
+    def z(self): return self[3]
+
 class triangle(c_uint16 * 3):
     @property
     def a(self): return self[0]

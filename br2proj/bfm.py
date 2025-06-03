@@ -45,12 +45,12 @@ class BFM_AttachedMesh:
 class BFM_MeshDesc:
     version:c_int32 #3 [NEW 23.03.2025] (according to sub_723D90, it's called BonePacket)
     tpIndex:c_int32 #// texpack index
-    #[14.03.2025] BR2 GOC, только ADZII.BFM имеет странный индекс материала -842150451
+    #[14.03.2025] BR2 GOG, только ADZII.BFM имеет странный индекс материала -842150451
     n1:c_int32
     n1_data:list[c_int16] #// n1 * short: parts indices
     n2:c_int32
     n2_data:list[c_int16] #// n2 * short: indices of adjacent parts
-    #[10.03.2025] Есть гипотеза, что n1=1 и n2=0 для обычных мэшей. Как только начинаются gap-мэши, эти значения могут указывать на "стыкове" сведения, между обычными мэшами
+    #[10.03.2025] Есть гипотеза, что n1=1 и n2=0 для обычных мэшей. Как только начинаются gap-мэши, эти значения могут указывать на "стыковые" сведения, между обычными мэшами
     version2:c_int32 #2 [NEW 23.03.2025] (according to sub_6BEEF0, it's called RenderPacket)
     datasize:c_int32 #// size of the vertex+triangle data for the mesh
     vertex_type:c_int32 #4 [NEW 25.03.2025] (according to sub_6BEFE0, but bfm only use type 4)
@@ -99,12 +99,13 @@ class BFM_Bones:
 
 @dataclass
 class BFM_MeshGeometry:
-    vertices: list[BFM_Vertex] #TODO переименовать в points как в smb
+    vertices: list[BFM_Vertex] #TODO[Отказано, здесь имеет место общепринятое понятие как вершины и вершинные аттрибуты] переименовать в points как в smb
     triangles: list[triangle]
     align: bytes #Special member for xbox
     @classmethod
     def sern_read(cls, rdr:sern_read.reader, verts:int, trins:int, datasize:int):
         pos = rdr.file.tell()
+        #TODO перекрывание стандартной функции dict одноименной переменной, пересмотреть во всех методах sern_read 
         dict = rdr.top_fields_read(cls, ('vertices', verts),  ('triangles', trins))
         dict['align'] = rdr.file.read(datasize-(rdr.file.tell()-pos))
         return cls(**dict)

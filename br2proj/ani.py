@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 from .sern import sern_read
 from .sern.fixed_types import *
-from .sern import jexplore
 
 @sern_read.fixeddata
 class ANI_Header:

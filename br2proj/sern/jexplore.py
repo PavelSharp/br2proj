@@ -44,6 +44,9 @@ import ctypes as ct
 JKey = enum.Enum('JKey', 'QUOTED UNQUOTED HIDE')
 JValue = enum.Enum('JValue', 'AUTO SINGLELINE MULTILINE')
 
+def _shallow_asdict(obj):
+    return {f.name: getattr(obj, f.name) for f in dataclasses.fields(obj)}
+
 class DebugJSONEncoder(json.JSONEncoder):
     def __init__(self, *args, **kwargs):
         kwargs['indent'] = kwargs.get('indent') or 4 #TODO что насчет нуля? Документация по json допускает здесь None
@@ -59,7 +62,7 @@ class DebugJSONEncoder(json.JSONEncoder):
 
     def default(self, o):
         if dataclasses.is_dataclass(type(o)):
-            return dataclasses.asdict(o)
+            return _shallow_asdict(o)
         if isinstance(o, ct.Array | bytes | bytearray): #TODO vs iteratable
             return list(o)
         else:
@@ -84,7 +87,7 @@ class DebugJSONEncoder(json.JSONEncoder):
 
     def _encode(self, o):
         if callable(getattr(type(o), "sern_jwrite", None)):
-            return self._base_encode(o.sern_jwrite())
+            return self._encode(o.sern_jwrite())
         if isinstance(o, dict):
             return self._dict_encode(o)
         if isinstance(o, list | tuple):

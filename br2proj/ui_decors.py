@@ -73,7 +73,8 @@ def transform_helper(cls=None, /, **kwargs):
     if orient_checkbox:
         anno['use_flip_orient'] = BoolProperty(
             name='Flip Orientation',
-            description='Switch between left-handed and right-handed coordinate systems',
+            description="""Switch between left-handed and right-handed coordinate systems. 
+Note: Switching coordinate systems may result in negative scale values in world matrix.""",
             default=orient_default,
         )
 

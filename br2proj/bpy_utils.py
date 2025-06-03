@@ -49,6 +49,7 @@ def origin_to_geometry(obj:bpy.types.Object):
     #obj.matrix_world = world_matrix
     pass
 
+#Keep in mind that when we change_orient, the scale becomes negative. In blenderui, some scale values will be negative.
 def axis_conversion(from_forward='Y', from_up='Z', to_forward='Y', to_up='Z', change_orient = False) -> Matrix:
     def parse(val): 
         axes = {'X':0, 'Y':1, 'Z':2}
