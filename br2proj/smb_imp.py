@@ -369,6 +369,7 @@ class smb_action_provider:
     _cached_build_animation: Any = field(default=None, init=False)
 
     def _build_animation(self, obj_ind:int, matr:Matrix):
+        assert self._ani is not None and self._fps is not None
         return smb_builder.build_animation('_unnamed_', obj_ind, self._ani, self._fps, matr=matr, optimize=self.optimize)
 
     def provide(self, obj_ind:int, matr:Matrix = Matrix()):
@@ -388,6 +389,7 @@ class smb_action_provider:
         if self.enable_cache:
             self._cached_build_animation = cache(self._build_animation)
             if len(ani.frames)>0:
+                #data = np.array([[list(tr) for tr in frame] for frame in ani.frames], dtype=np.float32)
                 data = np.array(ani.frames, dtype=np.float32)
                 _, uni, inv = np.unique(data, axis=1, return_index=True, return_inverse=True)
                 self._inv_inds = uni[inv]
@@ -563,10 +565,11 @@ class smb_importer:
 #KIMSUI.SMB - Хм, имена похожи на название костей
 #ROACHES.SMB - жуки
 #TOMAHAWK.SMB - МОТОЦИКЛ
+#MANS_MINGVASE1.SMB - ВАЗА
 #MISC_KILL_FAN(все позиции - MISC_054.TEX), PARK_HOT_DOG_CART, STREETS_GT_ACTOR, ST_HEART_ANI_BROKEN, SW_TRAIN_CRASH_ANIMATION - Какая-то интересная модель, есть damage, что насчет анимаций?
 #STREETS_RADIO_TOWER_A(and B) - КОСТИ?! и damage
 #MISC_COPCAR_BR.SMB - есть анимация
-#SW_GATE_ANI.SMB, STATION_CLOCK_GEARS.SMB - пример красивой анимации
+#SW_GATE_ANI.SMB, STATION_CLOCK_GEARS.SMB, AV_MINI_DAM.SMB - пример красивой анимации
 #STATION_CLOCK_WEIGHTS - самая длинная анимация
 
 #PARK_HELICOPTER_ANIMODEL.SMB - анимировання модель вертолета. Примечательно, что существует ещё файл PARK_HELICOPTER _ANIMODEL.SMB

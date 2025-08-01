@@ -5,25 +5,39 @@ import numpy as np
 import bpy
 
 from .sern import sern_read
-from .tex import (
-    TEXMipChoicer,
-    TEX_File,
-    TexFormats
-)
+from .tex import TEXMipChoicer, TEX_File
+
+from typing import NamedTuple
+
+class LoadedTexFile(NamedTuple):
+    tex:TEX_File
+    name:str
+    @staticmethod
+    def load_mip(tex:TEX_File, name:str, mi: int) -> bpy.types.Image | None:
+        pxs = tex.to_rgba(mi)
+        if pxs is None: return None
+        w, h = tex.header.mipmap_wh(mi)
+
+        bpy_img = bpy.data.images.new(name, width=w, height=h, alpha=True)
+        bpy_img.pixels = (pxs.astype(np.float32).reshape(-1) / 255.0).tolist() #type: ignore
+        return bpy_img
+    
+    def mips_generator(self):
+        tex, name = self.tex, self.name
+        for i in range(tex.header.mipmaps):
+            if (mip:=self.load_mip(tex, name, i)) is not None:
+                yield mip
+                name = f'{self.name}.mip{i}'
+
+    def first_mip(self):
+        return next(self.mips_generator()) #May cause exception if no any mips loaded
 
 @dataclass
 class tex_importer:
-    #TODO[сделано] ввестиметод load (TEX_File | Path | str) 
-    #TODO[сделано] специальная опция для чтения TEX_File отключающая загрузку митмэпов(должно ускорить чтение)
     mif : TEXMipChoicer = 0
-    #width, height, with_alpha, pixels
-    #create_func: typing.Callable[[int, int, bool, list[float]], any] = None
-    #naming_func: typing.Callable[[Path, int], str] = None
     with_ext:bool = False
-    load_hdr:bool = False
-    load_mips:bool = False
 
-    def _load(self, tex: tuple[TEX_File, str] | TEX_File | Path | str):
+    def load(self, tex: tuple[TEX_File, str] | TEX_File | Path | str) -> LoadedTexFile:
         src_type = type(tex)
         if isinstance(tex, tuple):
             tex, name = tex
@@ -37,51 +51,8 @@ class tex_importer:
                 tex = sern_read.reader.read_all(tex, TEX_File, self.mif)
         if not isinstance(tex, TEX_File) or not isinstance(name, str):
             raise TypeError(f'Unkown type for tex, type was {src_type.__name__}')
-        return tex, name
+        return LoadedTexFile(tex, name)
 
-
-    def _load_mip(self, tex:TEX_File, name:str, mi: int):
-        def conv_palette(pal):
-            ret = np.empty((len(pal), 4), dtype=np.float32)
-            ret[:,0],ret[:,1],ret[:,2],ret[:,3] = pal['r']/255,pal['g']/255,pal['b']/255,1
-            return ret
-        
-        w, h = tex.header.mipmap_wh(mi)
-        mip = tex.data.mipmaps[mi]
-
-        if tex.header.format == TexFormats.Indexed8:
-            pxs = conv_palette(tex.data.palette)[mip]
-        elif tex.header.format == TexFormats.Indexed8Alpha:
-            pxs = conv_palette(tex.data.palette)[mip]
-            pxs[:,3] = tex.data.alphas[mi]/255
-        elif tex.header.format == TexFormats.BGRA:
-            pxs = np.empty((mip.shape[0], 4), dtype=np.float32)
-            pxs[:,0],pxs[:,1],pxs[:, 2],pxs[:,3] = \
-            mip['r']/255,mip['g']/255,mip['b']/255,mip['a']/255
-
-        bpy_img = bpy.data.images.new(name, width=w, height=h, alpha=tex.header.format.with_alpha())
-        bpy_img.pixels = pxs.flatten().tolist()
-        return bpy_img
-
-    def load(self, tex: tuple[TEX_File, str] | TEX_File | Path | str):
-        tex, name = self._load(tex)
-        def find_mip_ind(ind):
-            for i in range(ind, len(tex.data.mipmaps)):
-                if tex.data.mipmaps[i] is not None: return i
-            return -1
-
-        mi = find_mip_ind(0)
-        def gen_mips():
-            nonlocal name, mi
-            src_name, ind = name, 1
-            while mi!=-1:
-                yield self._load_mip(tex, name, mi)
-                name, ind = f"{src_name}.mip{ind}", ind+1
-                mi = find_mip_ind(mi+1)
-                
-        mips = gen_mips() if self.load_mips else self._load_mip(tex, name, mi)
-
-        return (mips, tex.header) if self.load_hdr else mips
 
 class null_tex_provider:
     def provide(self, name:str): return None
@@ -98,10 +69,10 @@ class tex_provider(null_tex_provider):
         self.exts = exts
     
     @staticmethod
-    def open_img(path:Path) -> bpy.types.Image:
+    def open_img(path:Path) -> bpy.types.Image | None:
         if path.exists():
             if path.suffix.lower()=='.tex': 
-                return tex_importer().load(path)                  
+                return tex_importer(with_ext=True).load(path).first_mip()                
             else:
                 return bpy.data.images.load(str(path))
         return None

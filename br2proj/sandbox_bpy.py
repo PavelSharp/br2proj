@@ -192,7 +192,7 @@ def _work(self:Operator):
     bfm_path = base_path / 'MODELS' / anis[bi][0]
     ani_path = base_path / 'ANIMATIONS' / Path(anis[bi][0]).stem / anis[bi][1][ai]
 
-    skb_prov = bfm_imp.skb_provider(base_path / 'DATA')
+    skb_prov = bfm_imp.skb_provider(base_path / 'DATA', load_anims=True)
     linker = bfm_imp.bfm_linker(bfm_imp.LinkKinds.Collection, transform=matr)
     loader = bfm_imp.bfm_importer(linker=linker, create_materials = True, skb_prov=skb_prov, tex_prov=tex_prov)
 

@@ -48,7 +48,7 @@ class skb_provider:
     def provide(self, name:str, ret_path = False) -> SKB_File | tuple[SKB_File, Path]:
         path = self.path / name
         if path.suffix.upper() == '.SKL': path = path.with_suffix('.SKB')
-        skb = sern_read.reader.read_all(path, SKB_File, self.load_anims, must_eof=self.load_anims)
+        skb = sern_read.reader.read_all(path, SKB_File, self.load_anims, eof=self.load_anims)
         return (skb, path) if ret_path else skb
 
 class LinkKinds(enum.Enum):

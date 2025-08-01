@@ -13,10 +13,7 @@ from bpy.props import (
 from . import bpy_utils
 from . import ui_decors
 from .tex_imp import tex_importer
-from .tex import (
-    TexFormats,
-    TEX_Header
-)
+from .tex import TEX_Header, TEX_File, FormatInfo
 #TODO [СДЕЛАНО] Для диалога импорта tex снабдить возможностью предпросмотра
 #TODO [будущие] Внутри файловго диалога переключатель для выбора варианта TEX - либо br1 либо br2
 #TODO [СДЕЛАНО] Флажок что бы сделать флип
@@ -42,29 +39,36 @@ PreviewButton = ui_decors.button_operator(
 #class PreviewActiveImage(bpy.types.PropertyGroup):
 #    image: bpy.props.PointerProperty(type=bpy.types.Image)
 
+from typing import NamedTuple
+class MinMax(NamedTuple):
+    min:int
+    max:int
+    def __str__(self):
+        a,b = self
+        return str(a) if a==b else f'[{a},{b}]'
+    def __or__(self, v: int):
+        return MinMax(min(v, self.min), max(v, self.max))
+
+class EmptyMinMax(NamedTuple):
+    def __or__(self, v: int):
+        return MinMax(v,v)
+
 @dataclass
 class ImagesInfo:
-    _width:tuple[int, int] = None
-    _height:tuple[int, int] = None
-    _mipmaps:tuple[int, int] = None
-    _fmts:set[TexFormats] = field(default_factory=set)
+    width:MinMax | EmptyMinMax = EmptyMinMax()
+    height:MinMax | EmptyMinMax = EmptyMinMax() 
+    mipmaps:MinMax | EmptyMinMax = EmptyMinMax()
 
-    @staticmethod
-    def format(val:tuple[int, int]):
-        a,b = val
-        return a if a==b else f"[{a},{b}]"
+    _fmts:set[str] = field(default_factory=set)
 
-    def width(self): return self.format(self._width)
-    def height(self): return self.format(self._height)
-    def mipmaps(self): return self.format(self._mipmaps)
-    def fmts(self): return ', '.join(map(lambda v: v.name, sorted(self._fmts)))
+    def fmts(self): return ', '.join(map(lambda v: v, sorted(self._fmts)))
 
-    def concat(self, hdr:TEX_Header):
-        upd = lambda v, t: (v,v) if t is None else (min(v, t[0]), max(v, t[1]))
-        self._width = upd(hdr.width, self._width)
-        self._height = upd(hdr.height, self._height)
-        self._mipmaps = upd(hdr.mipmaps, self._mipmaps)
-        self._fmts.add(hdr.format)
+    def __or__(self, tex:TEX_File):
+        hdr = tex.header
+        self.width |= hdr.width
+        self.height |=hdr.height
+        self.mipmaps |= hdr.mipmaps
+        self._fmts.add(tex.data.format_info().desc)
         return self
 
 @ui_decors.icon_checkbox
@@ -143,14 +147,14 @@ Note. Disable this option if the image is going to be used as a texture.""",
 
     def on_preview_click(self, context): 
         self.clear_preview(context)
-        tex = tex_importer(self.find_optimal_mip, with_ext = True, load_hdr=True)
-        
+        tex_imp = tex_importer(self.find_optimal_mip, with_ext = True)
         for ind, file in enumerate(self.files):
             if path:=self.get_path(file):
-                img, hdr = tex.load(path) 
-                self.imgs_info.concat(hdr)
-                self.previews.append(self.flip_img(img))   
-                if ind==0: self.active_img = (img, context) #print(f"Preview mip is {img.size[0]}x{img.size[1]}")                
+                ltex = tex_imp.load(path)
+                self.imgs_info |= ltex.tex
+                bpy_img = ltex.first_mip()
+                self.previews.append(self.flip_img(bpy_img))   
+                if ind==0: self.active_img = (bpy_img, context) #print(f"Preview mip is {img.size[0]}x{img.size[1]}")                
 
     def draw(self, context):    
         layout = self.layout
@@ -164,9 +168,9 @@ Note. Disable this option if the image is going to be used as a texture.""",
         box = layout.box()
         if self.previews:
             info = self.imgs_info
-            box.label(text=f"Size={info.width()}x{info.height()}")
-            box.label(text=f"Mipmaps={info.mipmaps()}")
-            box.label(text=f"PixelFormat={info.fmts()}")
+            box.label(text=f'Size={info.width}x{info.height}')
+            box.label(text=f'Mipmaps={info.mipmaps}')
+            box.label(text=f'PixelFormat={info.fmts()}')
             #[На заметку] template_ID_preview изменяет изображение на выбранное в выподающем списке
             layout.template_ID_preview(*self.active_img(context), rows=3, cols=3, hide_buttons = True)
         else:
@@ -177,10 +181,11 @@ Note. Disable this option if the image is going to be used as a texture.""",
 
     def execute(self, context):
         self.clear_preview(context)
-        tex = tex_importer(mif= None if self.use_mipmaps else 0, load_mips=True, with_ext = True)
+        tex = tex_importer(mif = None if self.use_mipmaps else 0, with_ext = True)
         for file in self.files:
             if path:=self.get_path(file):
-                for bpy_img in tex.load(path): self.flip_img(bpy_img).use_fake_user=self.use_fake_user
+                for bpy_img in tex.load(path).mips_generator(): 
+                    self.flip_img(bpy_img).use_fake_user=self.use_fake_user
         return {'FINISHED'}
 
 def _menu_func_import(self, context):

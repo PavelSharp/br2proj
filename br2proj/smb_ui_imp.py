@@ -182,7 +182,6 @@ Enable this to import animation. This will be available as an action""",
                 smb.load(path)
             else:
                 self.report({'WARNING'}, f"File does not exist: {path}")
-
         return {'FINISHED'}
 
 def _menu_func_import(self, context):

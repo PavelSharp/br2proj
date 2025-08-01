@@ -1,4 +1,5 @@
 {
+    "python.analysis.typeCheckingMode": "basic",
     "blender.additionalArguments": [
         "--app-template", "empty_scene" 
     ],

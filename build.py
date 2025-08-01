@@ -30,6 +30,10 @@ CONFIG = Named(
     ),
 )
 
+def check(cond:bool, msg:str):
+    if not cond:
+        raise Exception(msg)
+
 def download_zip(url:str, out_path:Path,*, prefix:str = None, allow_overwrite:bool = True):
     check(out_path.is_dir(), 'The output path must be a directory')
     tmp, _hdrs = urlretrieve(url)
@@ -44,9 +48,6 @@ def download_zip(url:str, out_path:Path,*, prefix:str = None, allow_overwrite:bo
                 with zip.open(info) as src:
                     dest.write_bytes(src.read())
 
-def check(cond:bool, msg:str):
-    if not cond:
-        raise Exception(msg)
 
 #addon_path is 'root / br2proj'
 #out_path can be directory path or file path 
@@ -59,7 +60,7 @@ def build(addon_path:Path,*, blend_path:Path = None, out_path:Path = None, repo:
     if out_path is None:
         tmp_dir = TemporaryDirectory()
         out_path = Path(tmp_dir.name) / 'built.zip'
-    elif out_path.is_dir:
+    elif out_path.is_dir():
         out_arg = '--output-dir'
 
     res = subprocess.run([blend_path, 

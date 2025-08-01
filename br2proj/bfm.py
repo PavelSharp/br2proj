@@ -5,88 +5,79 @@
 #2.   https://suzerayne.weebly.com/
 #     which was published in January 2014.
 
-from dataclasses import dataclass
-
+from .sern.sern_core import sernAs, KnownArg
+from .sern.sern_read import sern_dataclass, le_fixed_dataclass as fixed_dataclass
 from .sern import sern_read
 from .sern.fixed_types import *
-#from .sern import jexplore
 from .smb import SMB_TexPack
 
-@dataclass
+@fixed_dataclass
 class BFM_Header:
-    version:c_int32 #6
-    lods:c_int32 #1 [NEW 25.03.2025] (according to sub_724100, but only 1 is supported.)
-    numParts:c_int32
-    numBones:c_int32
-    numTexPacks:c_int32
-    numAttachedMeshes: c_int32 #// like blades&guns
-    a:c_int32 #/? 1 always
-    b:c_int32 #/? 0 always
-    skb_name: ascii_char * 80 #// SKB identifier
+    version:int = sernAs(c_int32) #6
+    lods:int = sernAs(c_int32) #1 [NEW 25.03.2025] (according to sub_724100, but only 1 is supported.)
+    numParts:int = sernAs(c_int32)
+    numBones:int = sernAs(c_int32)
+    numTexPacks:int = sernAs(c_int32)
+    numAttachedMeshes:int = sernAs(c_int32) #// like blades&guns
+    a:int = sernAs(c_int32) #/? 1 always
+    b:int = sernAs(c_int32) #/? 0 always
+    skb_name: ascii_str = sernAs(ascii_char * 80) #// SKB identifier
 
 #Переименовано в BMF_Part(имена этих объектов в моделях начинаются на part_ )
-@dataclass
+@fixed_dataclass
 class BFM_Part:
-    name:ascii_char*30
-    bone:c_int32 #// tip is the sub-bounding box's coord. sys. reference point
+    name:ascii_str = sernAs(ascii_char*30)
+    bone:int = sernAs(c_int32) #// tip is the sub-bounding box's coord. sys. reference point
     box:box3d #// sub-bounding box
     #[10.03.2025] Проверено. bone - индекс кости, относительно который заданы вершины box
 
 
-@dataclass
+@fixed_dataclass
 class BFM_AttachedMesh:
-    name:ascii_char*24 #smb_name
-    bone:c_int32 #// tip is the sub-bounding box's coord. sys. reference point
-    a:c_float*12 #?? this should be attaching info AND BBOX!
+    name:ascii_str = sernAs(ascii_char*24) #smb_name
+    bone:int = sernAs(c_int32) #// tip is the sub-bounding box's coord. sys. reference point
+    a:Array[c_float] = sernAs(c_float*12) #?? this should be attaching info AND BBOX!
     #[10.03.2025] Не удалось подтвердить, что в .a содержится bound box
 
 
-@dataclass
+@sern_dataclass
 class BFM_MeshDesc:
-    version:c_int32 #3 [NEW 23.03.2025] (according to sub_723D90, it's called BonePacket)
-    tpIndex:c_int32 #// texpack index
+    version:int = sernAs(c_int32) #3 [NEW 23.03.2025] (according to sub_723D90, it's called BonePacket)
+    tpIndex:int = sernAs(c_int32) #// texpack index
     #[14.03.2025] BR2 GOG, только ADZII.BFM имеет странный индекс материала -842150451
-    n1:c_int32
-    n1_data:list[c_int16] #// n1 * short: parts indices
-    n2:c_int32
-    n2_data:list[c_int16] #// n2 * short: indices of adjacent parts
+    n1:int = sernAs(c_int32)
+    n1_data:list[int] = sernAs(list[c_int16], rarg=KnownArg('n1')) #// n1 * short: parts indices
+    n2:int = sernAs(c_int32)
+    n2_data: list[int] = sernAs(list[c_int16], rarg=KnownArg('n2')) #// n2 * short: indices of adjacent parts
     #[10.03.2025] Есть гипотеза, что n1=1 и n2=0 для обычных мэшей. Как только начинаются gap-мэши, эти значения могут указывать на "стыковые" сведения, между обычными мэшами
-    version2:c_int32 #2 [NEW 23.03.2025] (according to sub_6BEEF0, it's called RenderPacket)
-    datasize:c_int32 #// size of the vertex+triangle data for the mesh
-    vertex_type:c_int32 #4 [NEW 25.03.2025] (according to sub_6BEFE0, but bfm only use type 4)
-    numVertices:c_int32
-    numTriangles:c_int32
-    numBones:c_int32 #// why here?
-    @classmethod
-    def sern_read(cls, rdr:sern_read.reader):
-        return  cls(**rdr.top_fields_read(cls, 
-                    'version', 'tpIndex', 
-                    'n1', ('n1_data', sern_read.known_arg('n1')),
-                    'n2', ('n2_data', sern_read.known_arg('n2')),
-                    'version2',  'datasize', 'vertex_type',
-                    'numVertices', 'numTriangles', 'numBones')
-                )
+    version2:int = sernAs(c_int32) #2 [NEW 23.03.2025] (according to sub_6BEEF0, it's called RenderPacket)
+    datasize:int = sernAs(c_int32) #// size of the vertex+triangle data for the mesh
+    vertex_type:int = sernAs(c_int32) #4 [NEW 25.03.2025] (according to sub_6BEFE0, but bfm only use type 4)
+    numVertices:int = sernAs(c_int32)
+    numTriangles:int = sernAs(c_int32)
+    numBones:int = sernAs(c_int32) #// why here?
 
 BFM_TexPack = SMB_TexPack
 
-@sern_read.fixeddata
+@fixed_dataclass
 class BFM_Vertex:
-    numWeights:c_int32 #// max 4
-    weight_pos:point3f * 4 #weight vectors/vertex-bone offsets
-    biases:c_float * 4 #// weights, sum ~ 1.0
+    numWeights:int = sernAs(c_int32) #// max 4
+    weight_pos:Array[point3f] = sernAs(point3f * 4) #weight vectors/vertex-bone offsets
+    biases:Array[c_float] = sernAs(c_float * 4) #// weights, sum ~ 1.0
     normal:point3f
-    bone_indices:c_int32 * 4 #// bone indices
+    bone_indices: Array[c_int32] = sernAs(c_int32 * 4) #// bone indices
     uv:point2f
     norm1:point3f #?? binormal/tangent
     norm2:point3f #?? binormal/tangent (not sure of the order/orientation yet)
 
-@dataclass 
+
+@sern_dataclass
 class BFM_Bones:
     pos:list[point3f] #(baseframe bone positions/offsets)
     box:list[box3d] #[13.03.2025] Проверено, это bonund box, задан в пространстве кости
     #[13.03.2025] Br2 использует физику мягких тел, есть вероятность, что тип кости говорит об этой информации.
-    bone_type:list[c_int32] #(bone indices, what for?, maybe something with the line above...),
-    child_ind:list[c_int32]
+    bone_type:list[int] = sernAs(list[c_int32]) #(bone indices, what for?, maybe something with the line above...),
+    child_ind:list[int] = sernAs(list[c_int32])
 
     @classmethod
     def sern_read(cls, rdr:sern_read.reader, count:int):
@@ -97,7 +88,7 @@ class BFM_Bones:
                         ('child_ind', count)
                     ))
 
-@dataclass
+@sern_dataclass
 class BFM_MeshGeometry:
     vertices: list[BFM_Vertex] #TODO[Отказано, здесь имеет место общепринятое понятие как вершины и вершинные аттрибуты] переименовать в points как в smb
     triangles: list[triangle]
@@ -115,14 +106,14 @@ class BFM_MeshGeometry:
 #Очень вероятно, GapMesh - предназначен для маскирование отверстия при расчленении.
 #Хотя это не всё объясняет
 
-@dataclass
+@sern_dataclass
 class BFM_File:
     header:BFM_Header
     parts:list[BFM_Part]
     attached_meshes:list[BFM_AttachedMesh]
     text_packs: list[BFM_TexPack]
     bones:BFM_Bones
-    total_meshes: c_int32 #BFM_Header.numParts + numGapMeshes,
+    total_meshes: int = sernAs(c_int32) #BFM_Header.numParts + numGapMeshes,
     mesh_descs: list[BFM_MeshDesc]
     align:align16
     geometry: list[BFM_MeshGeometry]
@@ -137,7 +128,7 @@ class BFM_File:
                 ('text_packs', hdr.numTexPacks),
                 ('bones', hdr.numBones),
                 'total_meshes',
-                ('mesh_descs', sern_read.known_arg('total_meshes')),
+                ('mesh_descs', KnownArg('total_meshes')),
                 'align',
             )
         #ps2 crash here. Geometry can use compression, in which real numbers are encoded as uint16. But the size of the vertices is variable

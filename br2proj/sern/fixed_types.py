@@ -1,6 +1,6 @@
 import ctypes
-from . import sern_read
 
+c_bool = ctypes.c_bool
 c_ubyte = ctypes.c_ubyte
 c_byte = ctypes.c_byte
 c_uint8 = ctypes.c_uint8
@@ -20,7 +20,12 @@ c_float = ctypes.c_float
 c_double = ctypes.c_double
 c_longdouble = ctypes.c_longdouble
 
-'''
+
+Array = ctypes.Array
+Structure = ctypes.Structure
+LittleEndianStructure = ctypes.LittleEndianStructure
+BigEndianStructure = ctypes.BigEndianStructure
+
 c_ushort = ctypes.c_ushort
 c_short = ctypes.c_ushort
 
@@ -30,10 +35,9 @@ c_uint = ctypes.c_uint
 c_long = ctypes.c_long
 c_ulong = ctypes.c_ulong
 
-
 c_longlong = ctypes.c_longlong
 c_ulonglong = ctypes.c_ulonglong
-'''
+
 
 
 #решение наследовать отличное, т.к. point2f*n - работает ожидаемым образом
@@ -78,58 +82,82 @@ class box3d(point3f * 2):
     def b(self): return self[1] 
 
 
-
 class _mulmeta(type):
     def __mul__(cls, count):
-        assert isinstance(count, int) and count>=0, "count must be int and non-negative" 
+        assert isinstance(count, int) and count>=0, 'count must be int and non-negative'
         return cls.create_mul_type(count)
     def __call__(cls, *args, **kwargs):
-        raise TypeError("Direct call is not allowed. Use * as type level")
+        raise TypeError('Direct call is not allowed. Use * as type level')
 
-class align: pass #for using with isinstance(obj, align)
+
+class align: 
+    pass #for using with isinstance(obj, align)
 
 class align_factory(metaclass=_mulmeta):
     @classmethod
     def create_mul_type(cls, count:int):
         class align_internal(align):
             @staticmethod
-            def sern_read(rdr: sern_read.reader):
+            def sern_read(rdr): #: sern_read.reader
                 file = rdr.file
                 pos = file.tell()
                 diff = (pos+count-1)//count*count - pos
                 class align_fixed(c_uint8 * diff, align_internal): pass
-                return align_fixed.from_buffer_copy(file.read(diff))
+                return align_fixed.from_buffer_copy(file.read(diff)) #TODO вызвать excacly_read вмето создание align_fixed
                     
         return align_internal
 
 
 class align16(align_factory * 16): pass
 
-class ascii_str:
-    """
-    Класс-маркер для идентификации массива ASCII-символов.
-    Применение: вызов isinstance
-    """
-    pass
+# class _AsciiArrayMeta(type(Array)):
+#     def __mul__(cls, _):
+#         raise TypeError('Not allowed')
 
-class ascii_char(metaclass=_mulmeta):
-    """
-    Реализует класс строки фиксированной длины, создаваемые по ascii_char * n
-    Применение. строки, извлекаемые из бинарных файлов, 
-    которые является непрерывной последовательностью ascii символов
-    оканчивающихся 0, после которого могут идти любые байты-заполнители
-    Требоваия. Индентификация этого типа производиться вызывом 
-    isinstance(type_, ascii_str)
-    """
-    @classmethod
-    def create_mul_type(cls, count:int):
-        @sern_read.unmapped_type
-        class ascii_array(c_char * count, ascii_str):
-            def __str__(self):
-                #Self.value вернет строку до первого \0, в случае отсутствия - вся строка
-                data = bytes(self)
-                pos = data.find(b'\0')
-                if pos == -1: raise ValueError("This string is not null terminated")
-                return data[:pos].decode('ascii')
-            def sern_jwrite(self): return str(self)
-        return ascii_array
+#It's a clever trick. We prefer c_uint8 instead of c_char to avoid reflection, so unmapped_typ no need
+class ascii_str(Array): #, metaclass=_AsciiArrayMeta
+    _length_ = 0 #type: ignore
+    _type_ = c_uint8 #type: ignore
+    def __str__(self):
+        #self.value вернет строку до первого \0, в случае отсутствия - вся строка
+        data = bytes(self)
+        pos = data.find(b'\0')
+        if pos == -1: raise ValueError("This string is not null terminated")
+        return data[:pos].decode('ascii')
+
+class ascii_char(metaclass=_mulmeta): #We don't inherit from c_char(c_uint8)
+    @staticmethod
+    def create_mul_type(count: int):
+        return type(f'ascii_str_{count}', (ascii_str,), {'_length_': count})
+
+
+# class ascii_str:
+#     """
+#     #TODO что-то придумать, что бы разрешить использование этого типа как 
+#     fld:Annotated[ascii_str, SernAs(ascii_char*16)]
+#     Класс-маркер для идентификации массива ASCII-символов.
+#     Применение: вызов isinstance, вызов issubclass
+#     """
+#     pass
+
+# class ascii_char(metaclass=_mulmeta):
+#     """
+#     Реализует класс строки фиксированной длины, создаваемые по ascii_char * n
+#     Применение. строки, извлекаемые из бинарных файлов, 
+#     которые является непрерывной последовательностью ascii символов
+#     оканчивающихся 0, после которого могут идти любые байты-заполнители
+#     Требоваия. Индентификация этого типа производиться вызывом 
+#     isinstance(type_, ascii_str), а также issubclass(ascii_char*5, ascii_str)
+#     """
+#     @classmethod
+#     def create_mul_type(cls, count:int):
+#         @sern_read.unmapped_type
+#         class ascii_array(c_char * count, ascii_str):
+#             def __str__(self):
+#                 #Self.value вернет строку до первого \0, в случае отсутствия - вся строка
+#                 data = bytes(self)
+#                 pos = data.find(b'\0')
+#                 if pos == -1: raise ValueError("This string is not null terminated")
+#                 return data[:pos].decode('ascii')
+#             def sern_jwrite(self): return str(self)
+#         return ascii_array

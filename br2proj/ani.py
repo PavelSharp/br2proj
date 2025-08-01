@@ -3,50 +3,42 @@
 #     by BloodHammer (Mjolnir) (v1.19 - 15.01.2006)
 #Available at https://gamebanana.com/tools/18225 (Thanks KillerExe_01 for published it)
 
-from dataclasses import dataclass
-
+from .sern import sern_core
+from .sern.sern_core import sernAs, KnownArg
+from .sern.sern_read import sern_dataclass, le_fixed_dataclass as fixed_dataclass
 from .sern import sern_read
 from .sern.fixed_types import *
 
-@sern_read.fixeddata
+@fixed_dataclass
 class ANI_Header:
-    version:c_int32
-    numFrames:c_int32
-    numBonesUsed:c_int32 #// same bones may have multiple transformations applied
-    numBonesUsed2:c_int32 #/? number of some more entries more at the end...
-    animPoolSize:c_int32 #// size of animdata (+sometimes more, entry2 depending?)
+    version:int = sernAs(c_int32)
+    numFrames:int = sernAs(c_int32)
+    numBonesUsed:int = sernAs(c_int32) #// same bones may have multiple transformations applied
+    numBonesUsed2:int = sernAs(c_int32) #/? number of some more entries more at the end...
+    animPoolSize:int = sernAs(c_int32) #// size of animdata (+sometimes more, entry2 depending?)
 
-@dataclass
+@fixed_dataclass
 class ANI_BoneEntry:
-    name:ascii_char*24
-    tt:c_int32 #/? transformation type (0..8)
-    numKeyFrames:c_int32
+    name:ascii_str = sernAs(ascii_char*24)
+    tt:int = sernAs(c_int32) #/? transformation type (0..8)
+    numKeyFrames:int = sernAs(c_int32)
 
-@dataclass
+@fixed_dataclass
 class ANI_BoneEntry2: #?? binding of some sort??
-    name:ascii_char*24 #/? of what? sync/wall/rail/pole/gun/spark... ?
-    bone:ascii_char*24 #/? tag, offset? OPTIONAL!
-    a:c_int32 #??
-    b:c_int32 #??
-    c:c_int32 #0
+    name:ascii_str = sernAs(ascii_char*24) #/? of what? sync/wall/rail/pole/gun/spark... ?
+    bone:ascii_str =sernAs(ascii_char*24) #/? tag, offset? OPTIONAL!
+    a:int = sernAs(c_int32) #??
+    b:int = sernAs(c_int32) #??
+    c:int = sernAs(c_int32) #0
 
-@dataclass
+@sern_dataclass
 class ANI_File:
     header:ANI_Header
-    animPool:list[c_uint8]
-    used_bones: list[ANI_BoneEntry]
-    a:c_int32 #(0/5)
-    b:c_int32 #(0)
-    unk1: list[ANI_BoneEntry2]
-    @classmethod
-    def sern_read(cls, rdr:sern_read.reader):
-        dict = rdr.top_fields_read(cls, 
-                'header',
-                ('animPool', sern_read.known_arg('header').animPoolSize),
-                ('used_bones', sern_read.known_arg('header').numBonesUsed),
-                'a', 'b',
-                ('unk1', sern_read.known_arg('header').numBonesUsed2))
-        return cls(**dict)
+    animPool:list[int] = sernAs(list[c_uint8], rarg=KnownArg('header').animPoolSize)
+    used_bones: list[ANI_BoneEntry] = sernAs(rarg=KnownArg('header').numBonesUsed)
+    a:int = sernAs(c_int32) #(0/5)
+    b:int = sernAs(c_int32) #(0)
+    unk1: list[ANI_BoneEntry2] = sernAs(rarg=KnownArg('header').numBonesUsed2)
 
 #Присутсвует ANI_BoneEntry2
 #BITE_BEHIND_GUN_ALT.ANI
