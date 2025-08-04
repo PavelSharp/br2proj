@@ -147,12 +147,12 @@ Note. Disable this option if the image is going to be used as a texture.""",
 
     def on_preview_click(self, context): 
         self.clear_preview(context)
-        tex_imp = tex_importer(self.find_optimal_mip, with_ext = True)
+        tex_imp = tex_importer(with_ext = True)
         for ind, file in enumerate(self.files):
             if path:=self.get_path(file):
                 ltex = tex_imp.load(path)
                 self.imgs_info |= ltex.tex
-                bpy_img = ltex.first_mip()
+                bpy_img = ltex.optimial_mip(self.find_optimal_mip)
                 self.previews.append(self.flip_img(bpy_img))   
                 if ind==0: self.active_img = (bpy_img, context) #print(f"Preview mip is {img.size[0]}x{img.size[1]}")                
 
@@ -181,11 +181,12 @@ Note. Disable this option if the image is going to be used as a texture.""",
 
     def execute(self, context):
         self.clear_preview(context)
-        tex = tex_importer(mif = None if self.use_mipmaps else 0, with_ext = True)
+        tex = tex_importer(with_ext = True)
         for file in self.files:
             if path:=self.get_path(file):
                 for bpy_img in tex.load(path).mips_generator(): 
                     self.flip_img(bpy_img).use_fake_user=self.use_fake_user
+                    if not self.use_mipmaps: break
         return {'FINISHED'}
 
 def _menu_func_import(self, context):

@@ -474,6 +474,7 @@ class reader:
                 except OSError:
                     return False
             if fileno_test():
+                #TODO явно проверить что было прочитано запрошенное число байт
                 return np.fromfile(stream, dtype=dtype, count=count) # type: ignore
             else:
                 return np.frombuffer(exactly_read(stream, count*np.dtype(dtype).itemsize), dtype=dtype, count=count) # type: ignore

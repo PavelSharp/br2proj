@@ -5,17 +5,16 @@ import numpy as np
 import bpy
 
 from .sern import sern_read
-from .tex import TEXMipChoicer, TEX_File
+from .tex import TEX_File, TEX_Header
 
-from typing import NamedTuple
+from typing import NamedTuple, Callable
 
 class LoadedTexFile(NamedTuple):
     tex:TEX_File
     name:str
     @staticmethod
-    def load_mip(tex:TEX_File, name:str, mi: int) -> bpy.types.Image | None:
+    def load_mip(tex:TEX_File, name:str, mi: int) -> bpy.types.Image:
         pxs = tex.to_rgba(mi)
-        if pxs is None: return None
         w, h = tex.header.mipmap_wh(mi)
 
         bpy_img = bpy.data.images.new(name, width=w, height=h, alpha=True)
@@ -25,16 +24,19 @@ class LoadedTexFile(NamedTuple):
     def mips_generator(self):
         tex, name = self.tex, self.name
         for i in range(tex.header.mipmaps):
-            if (mip:=self.load_mip(tex, name, i)) is not None:
-                yield mip
-                name = f'{self.name}.mip{i}'
+            yield self.load_mip(tex, name, i)
+            name = f'{self.name}.mip{i}'
 
     def first_mip(self):
-        return next(self.mips_generator()) #May cause exception if no any mips loaded
+        return next(self.mips_generator())
+
+    def optimial_mip(self, optimal:Callable[[TEX_Header, int], bool]):
+        mips = self.mips_generator()
+        return next(mip for ind, mip in enumerate(mips) if optimal(self.tex.header, ind))
+
 
 @dataclass
 class tex_importer:
-    mif : TEXMipChoicer = 0
     with_ext:bool = False
 
     def load(self, tex: tuple[TEX_File, str] | TEX_File | Path | str) -> LoadedTexFile:
@@ -48,7 +50,7 @@ class tex_importer:
                 tex = Path(tex)
             if isinstance(tex, Path):
                 name = tex.name if self.with_ext else tex.stem
-                tex = sern_read.reader.read_all(tex, TEX_File, self.mif)
+                tex = sern_read.reader.read_all(tex, TEX_File)
         if not isinstance(tex, TEX_File) or not isinstance(name, str):
             raise TypeError(f'Unkown type for tex, type was {src_type.__name__}')
         return LoadedTexFile(tex, name)

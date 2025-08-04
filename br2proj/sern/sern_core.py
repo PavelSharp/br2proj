@@ -249,6 +249,14 @@ class _Validators(NamedTuple):
 
     def map(self, transform:Callable[[Any], Any], msg = None):
         return self.func(lambda x: (True, transform(x)), msg)
+    
+    def try_map(self, transform:Callable[[Any], Any], msg = None):
+        def trans(x):
+            try:
+                return True, transform(x)
+            except:
+                return False, None
+        return self.func(trans, msg)
 
     def check(self, test:Callable[[Any], bool], msg = None):
         return self.func(lambda x: (test(x), x), msg)
