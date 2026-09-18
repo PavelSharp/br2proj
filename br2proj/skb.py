@@ -68,7 +68,7 @@ class SKB_Anim:
             from itertools import groupby
             return [list(group) for is_split, group in groupby(lst, key=lambda x: x != value) if is_split]
         def dec(n:str):
-            di[n] = [bytes(w).decode('ascii', errors='replace') for w in split_all_by_value( [q[0] for q in list(di[n])],0)]
+            di[n] = [bytes(w).decode('ascii', errors='replace') for w in split_all_by_value( [q for q in list(di[n])],0)]
         dec('name')
         dec('ani_file_name')
         return di

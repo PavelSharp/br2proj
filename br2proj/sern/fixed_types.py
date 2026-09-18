@@ -125,6 +125,16 @@ class ascii_str(Array): #, metaclass=_AsciiArrayMeta
         if pos == -1: raise ValueError("This string is not null terminated")
         return data[:pos].decode('ascii')
 
+    def sern_jwrite(self): return str(self)
+
+    # def sern_jwrite(self):
+    #     data = bytes(self)
+    #     pos = data.find(b'\0')
+    #     if pos==-1: pos = len(data)
+    #     head = data[:pos].decode('ascii', errors='replace')
+    #     tail = data[pos+1:].decode('ascii', 'backslashreplace')
+    #     return head if (len(tail)==0 or all(b == 0 for b in tail)) else [head,tail]
+
 class ascii_char(metaclass=_mulmeta): #We don't inherit from c_char(c_uint8)
     @staticmethod
     def create_mul_type(count: int):
