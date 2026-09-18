@@ -160,6 +160,49 @@ class bfm_builder:
     def load_textures_only(pack:BFM_TexPack, tex_prov:null_tex_provider):
         return smb_builder.load_textures_only(pack, tex_prov)
 
+#    @staticmethod
+#     def build_armature(name, bfm_bones, skb_bones):
+#         arm = bpy.data.armatures.new(name)
+#         obj = _Armature(bpy.data.objects.new(name, arm))
+#         bpy.context.scene.collection.objects.link(obj.arm_obj)
+
+#         bpy.context.view_layer.objects.active = obj.arm_obj
+#         bpy.ops.object.mode_set(mode='EDIT')
+
+#         # Left-handed → Right-handed + align to Blender upright
+#         LH_to_RH = Matrix((
+#             (-1, 0, 0),
+#             ( 0, 1, 0),
+#             ( 0, 0, 1)
+#         ))
+#         Rotate_X90 = Matrix.Rotation(math.radians(90.0), 3, 'X')
+#         Coord = Rotate_X90 @ LH_to_RH
+
+#         for i, skb in enumerate(skb_bones):
+#             parent = skb.parentBone
+#             bone = arm.edit_bones.new(str(skb.name))
+
+#             # convert bone head (local bind position)
+#             head = Coord @ Vector(bfm_bones.pos[i])
+
+#             if parent != -1:
+#                 bone.parent = arm.edit_bones[parent]
+#                 head = bone.parent.tail + head
+
+#             # convert rotation matrix
+#             rot = Matrix(skb.matrix)
+#             rot = Coord @ rot @ Coord.inverted()
+
+#             # bone axis in Blender goes along +Y
+#             axis = rot @ Vector((0, -0.3, 0))
+
+#             bone.head = head
+#             bone.tail = head + axis
+#             obj.bone_names.append(bone.name)
+
+#         bpy.ops.object.mode_set(mode='OBJECT')
+#         return obj
+
     @staticmethod
     def build_armature(name:str, bfm_bones:BFM_Bones, skb_bones:list[SKB_Bone]) -> _Armature:
         #TODO сравнить количесвто костей

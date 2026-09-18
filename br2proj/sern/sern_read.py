@@ -235,10 +235,10 @@ class reader:
         return True
 
     @classmethod #TODO подумать над тем, что бы объявить эту функцию на уровне библиотеки
-    def read_all(cls, file:ByteStream | PathLike, typ, *args, eof:CheckEOFPolicy | bool = 'warning'):
+    def read_all(cls, file:ByteStream | PathLike, typ, *args, eof:CheckEOFPolicy | bool = 'warning', checker:Checker | None = AnnoChecker()):
         if isinstance(eof, bool): eof = 'warning' if eof else 'silent'
         def impl(stream:ByteStream, path):
-            res = cls(stream).auto_read(typ, *args)
+            res = cls(stream, checker=checker).auto_read(typ, *args)
             cls.check_eof(stream, eof, path)
             return res
         if isinstance(file, PathLikeTypes):

@@ -38,7 +38,7 @@ class LoadedTexFile(NamedTuple):
 @dataclass
 class tex_importer:
     with_ext:bool = False
-
+    #TODO задавать конвертер здесь
     def load(self, tex: tuple[TEX_File, str] | TEX_File | Path | str) -> LoadedTexFile:
         src_type = type(tex)
         if isinstance(tex, tuple):
@@ -50,7 +50,7 @@ class tex_importer:
                 tex = Path(tex)
             if isinstance(tex, Path):
                 name = tex.name if self.with_ext else tex.stem
-                tex = sern_read.reader.read_all(tex, TEX_File)
+                tex = sern_read.reader.read_all(tex, TEX_File, checker=None)
         if not isinstance(tex, TEX_File) or not isinstance(name, str):
             raise TypeError(f'Unkown type for tex, type was {src_type.__name__}')
         return LoadedTexFile(tex, name)

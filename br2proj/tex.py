@@ -267,7 +267,7 @@ class MipPS2_Sw:
     def unswizz(self, hdr: TEX_Header, mi:int):
         w, h = hdr.mipmap_wh(mi)
         data = swizzle_box.mapping_bpp8.unswizzle(w, h, self.mip, swizzle_box.Ps2Swizz)
-        return np.frombuffer(data, dtype=np.uint8) #TODO innorrect shape
+        return np.frombuffer(data, dtype=np.uint8).reshape(h,w)
 
 @sern_dataclass
 class TexPS2_SwPalettedRGBA_SwMips(TEX_Base):
@@ -441,11 +441,9 @@ class TEX_File:
     data: TEX_Base
 
     def to_rgba(self, mi:int): return self.data.to_rgba(self.header, mi)
-    #TODO [1,br1,mac]RAYNE_GLOSSMAP.TEX
     @classmethod
     def sern_read(cls, rdr:sern_read.reader):
         header = rdr.auto_read(SelectebleTexHeader)
-        print(type(header))
         tex_type = cls.TEX_MAPPER[header.format, header.version]
         return cls(header, rdr.auto_read(tex_type, (header, )))
 
