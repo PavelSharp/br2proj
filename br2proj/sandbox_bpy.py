@@ -8,7 +8,7 @@ import struct
 
 from . import bfm_imp
 from . import tex_imp
-from mathutils import Vector, Matrix, Quaternion
+from mathutils import Vector, Matrix, Quaternion, Euler
 import math
 from math import pi
 
@@ -175,9 +175,8 @@ def jlog(*args):
     for i in range(0, len(args), 2): jexplore.jprint(args[i], path=args[i+1].name+'.json')
 
 def _work(self:Operator):
-    #_work2()
-    #return
     DO_LOGS = False
+    DO_TEXTURES = True
     ##matr = Matrix.Rotation(math.radians(90.0), 4, 'Y') @ Matrix.Rotation(math.radians(90.0), 4, 'Z')
     matr = Matrix((
         (1,0,0,0),
@@ -185,16 +184,20 @@ def _work(self:Operator):
         (0,1,0,0),
         (0,0,0,1),
     ))
-    bfm_imp.bfm_builder.bone_orient = Vector((1,0,0)) #TODO Delete it as soon as I can
+    #TODO SLEGION.BFM + COMBO1.ANI где-то происходит нежелательная смена знака в угле
+
     base_path = Path('D:/Games/Bloodrayne 2_min')
-    anis = [('RAYNE.BFM', ['RUN_FORWARD.ANI', 'STAND_ALERT.ANI', 'locked_idle.ANI'])]
+    anis = [
+        ('RAYNE.BFM', ['WALK_FORWARD.ANI', 'RUN_FORWARD.ANI', 'POLE_JUMP.ANI', 'POLE_OFF.ANI', 'POLE_GRAB.ANI', 'POLE_DOWN_OFF.ANI', 'POLE_DISMOUNT_TO_WJ_LONG.ANI', 'POLE_LONGJUMP.ANI', 'BITE_STAND_KICK.ANI',  'COMBO_CIRCLE_KICK.ANI', 'RECOVERY_ONBACK_DEFAULT.ANI', 'DOUBLE_JUMP.ANI', 'FEED_REPEL.ANI', 'STAND_ALERT.ANI', 'locked_idle.ANI']),
+        ('SLEGION.BFM', ['WALKS.ANI', 'RUNN.ANI', 'COMBO1.ANI', 'ATTACK01.ANI', 'ATTACK02.ANI', 'BACKEVADEATTACK.ANI']),
+        ]
     bi, ai = 0,0
     bfm_path = base_path / 'MODELS' / anis[bi][0]
     ani_path = base_path / 'ANIMATIONS' / Path(anis[bi][0]).stem / anis[bi][1][ai]
 
     skb_prov = bfm_imp.skb_provider(base_path / 'DATA', load_anims=True)
     linker = bfm_imp.bfm_linker(bfm_imp.LinkKinds.Collection, transform=matr)
-    loader = bfm_imp.bfm_importer(linker=linker, create_materials = True, skb_prov=skb_prov, tex_prov=tex_prov)
+    loader = bfm_imp.bfm_importer(linker=linker, create_materials = DO_TEXTURES, skb_prov=skb_prov, tex_prov= tex_prov if DO_TEXTURES else null_tex_prov)
 
     bfm:BFM_File = sern_read.reader.read_all(bfm_path, BFM_File)
     skb, skb_path = skb_prov.provide(str(bfm.header.skb_name), True)
@@ -222,109 +225,80 @@ def _work(self:Operator):
     def check_kf(kf):
         if kf<0 or kf>=ani.header.numFrames:
             raise ValueError(f"Keyframe err, kf was {kf}")
+
     def unp(kf, *args):
         check_kf(kf)
-        return (kf, *tuple((arg / 32768) * math.pi for arg in args))
+        return kf, *tuple(arg / 32768.0 * math.pi for arg in args)
 
     def sym(name:str):
-        #for bone in rayne_skb.bones:
-        #    if ( bone.symBone!=-1 and str(bone.name)==name):
-        #        print(1)
-        #        return str(rayne_skb.bones[bone.symBone].name)
+        for bone in skb.bones:
+           if ( bone.symBone!=-1 and str(bone.name)==name):
+               return str(skb.bones[bone.symBone].name)
         return name
+
     #[24.04.2025, IMPORTANT] See Nocturne/Editor/doc/Editor.pdf Coordinate System for more details about it
+
+    bone_orient = bfm_imp.bfm_builder.bone_orient.inverted()
+
+    def add_pos(bpy_bone, kf, x, y, z):
+        bpy_bone.location = bone_orient @ Vector((z,x,y))
+        bpy_bone.keyframe_insert("location", frame=kf+1)
+
+    def add_scale(bpy_bone, kf, x, y, z):
+        bpy_bone.scale = Vector((x, y, z))
+        bpy_bone.keyframe_insert("scale", frame=kf+1)
+
+    def add_quat(bpy_bone, kf, ang_x=0, ang_y=0, ang_z=0):
+        # In accordance with sub_7227A0, Euler angles are used only for
+        # compact storage, which are then converted by the engine into quaternion
+        quat = Euler((-ang_y,ang_x,-ang_z), 'ZXY').to_quaternion()
+        bpy_bone.rotation_quaternion = bone_orient @ quat @ bone_orient.inverted()
+        bpy_bone.keyframe_insert("rotation_quaternion", frame=kf+1)
+    #According to sub_721820, which parses the ANI file
     for ani_bone in ani.used_bones:
         tt = ani_bone.tt
         bpy_bone = arm.pose.bones[sym(str(ani_bone.name))]
-        #qw = arm.data.bones[str(ani_bone.name)]
-        #matr = Matrix.Translation(qw.head)
-        bpy_bone.rotation_mode = 'XYZ'
 
-        is_sym = False
-        for bone in skb.bones:
-            if bone.symBone!=-1 and str(bone.name)==bpy_bone.name:
-                is_sym = True
-                break
-        
         for k in range(ani_bone.numKeyFrames):
-            if tt in [0, 1]:
-                kf,x,y,z = struct.unpack("ifff", bytes(ani.animPool[pool_ind:pool_ind + 16]))
-                check_kf(kf)
-                pool_ind+=16
+            bpy_bone.rotation_mode = 'QUATERNION'
 
+            if tt in[0,1]:
+                ts = 16
+                kf, x, y, z = struct.unpack("ifff", bytes(ani.animPool[pool_ind:pool_ind + ts]))
+                check_kf(kf)
                 if tt == 0:
-                    bpy_bone.location =Vector((x,y,z))
-                    bpy_bone.keyframe_insert("location", frame=kf)
+                    add_pos(bpy_bone, kf, x, y, z)
                 elif tt == 1:
-                    bpy_bone.scale = (x, y, z) 
-                    bpy_bone.keyframe_insert("scale", frame=kf)
+                    add_scale(bpy_bone, kf, x, y, z)
 
             elif tt in [2,3,4]:
-                vl = struct.unpack("hh", bytes(ani.animPool[pool_ind:pool_ind + 4]))
-                pool_ind+=4
-                kf, ang1 = unp(*vl)
-
-                if tt == 2:
-                    if is_sym: ang1=-ang1
-                    bpy_bone.rotation_euler.x = ang1
-                    bpy_bone.keyframe_insert("rotation_euler", index=0, frame=kf)
-                elif tt == 3:
-                    if is_sym: ang1=-ang1
-                    bpy_bone.rotation_euler.y = ang1
-                    bpy_bone.keyframe_insert("rotation_euler", index=1, frame=kf)
-                elif tt == 4:
-                    if is_sym: ang1=-ang1
-                    bpy_bone.rotation_euler.z = ang1
-                    bpy_bone.keyframe_insert("rotation_euler", index=2, frame=kf)
+                ts = 4
+                vl = struct.unpack("hh", bytes(ani.animPool[pool_ind:pool_ind + ts]))
+                kf, ang = unp(*vl)
+                if tt == 2: add_quat(bpy_bone, kf, ang_x=ang)
+                elif tt == 3: add_quat(bpy_bone, kf, ang_y=ang)
+                elif tt == 4: add_quat(bpy_bone, kf, ang_z=ang)
 
             elif tt in [5,6,7]:
-                vl = struct.unpack("hhh", bytes(ani.animPool[pool_ind:pool_ind + 6]))
-                pool_ind+=6
-                pool_ind = (pool_ind+4-1)//4*4
-
+                ts = 6
+                vl = struct.unpack("hhh", bytes(ani.animPool[pool_ind:pool_ind + ts]))
                 kf, ang1, ang2 = unp(*vl)
-
-                if tt == 5:  # XY
-                    bpy_bone.rotation_euler.x = ang1
-                    bpy_bone.rotation_euler.y = ang2
-                    bpy_bone.keyframe_insert("rotation_euler", index=0, frame=kf)
-                    bpy_bone.keyframe_insert("rotation_euler", index=1, frame=kf)
-                elif tt == 6:  # YZ
-                    bpy_bone.rotation_euler.y = ang1
-                    bpy_bone.rotation_euler.z = ang2
-                    bpy_bone.keyframe_insert("rotation_euler", index=1, frame=kf)
-                    bpy_bone.keyframe_insert("rotation_euler", index=2, frame=kf)
-                else: # XZ
-                    bpy_bone.rotation_euler.z = ang2
-                    bpy_bone.rotation_euler.x = ang1
-                    bpy_bone.keyframe_insert("rotation_euler", index=2, frame=kf)
-                    bpy_bone.keyframe_insert("rotation_euler", index=0, frame=kf)
-                
-
-            elif tt==8:
-                vl = struct.unpack("hhhh", bytes(ani.animPool[pool_ind:pool_ind + 8]))
-                pool_ind+=8
+                if tt == 5:   add_quat(bpy_bone, kf, ang_x=ang1, ang_y=ang2)  # XY
+                elif tt == 6: add_quat(bpy_bone, kf, ang_y=ang1, ang_z=ang2)  # YZ
+                elif tt == 7: add_quat(bpy_bone, kf, ang_x=ang1, ang_z=ang2)  # XZ
+            elif tt == 8:
+                ts = 8
+                vl = struct.unpack("hhhh", bytes(ani.animPool[pool_ind:pool_ind + ts]))
                 kf, ang1, ang2, ang3 = unp(*vl)
-                if is_sym: ang1=-ang1
-                bpy_bone.rotation_euler = (ang1, ang2, ang3)
-                bpy_bone.keyframe_insert("rotation_euler", frame=kf)
-                #print(vl[0])
-            else:
-                raise ValueError('TT ERROR')
-            
+                add_quat(bpy_bone, kf, ang_x=ang1, ang_y=ang2, ang_z=ang3)
+            pool_ind += ts
+
+        pool_ind = (pool_ind + 3) & ~3
+
     if pool_ind!=ani.header.animPoolSize: #TODO extra data RUN_FORWARD?
         self.report({'WARNING'}, 'Warring. The pool has not been exhausted. See in console')
         print(f'pool_ind={pool_ind}, header_pool_size={ani.header.animPoolSize}')
-            #    anim_pool_index += 4
-                
-            #    bone.location.x = value  # Например, изменяем X
-            #    bone.keyframe_insert("location", index=0, frame=frame+1)
 
-            #elif tt == 8:  # Вращение (кватернион)
-            #    quat_x = struct.unpack("f", bytes(ani_data["animPool"][anim_pool_index:anim_pool_index + 4]))[0]
-            #    anim_pool_index += 4
-            #    bone.rotation_quaternion = (1, quat_x, 0, 0)  # Заглушка (полный кватернион нужно читать!)
-            #    bone.keyframe_insert("rotation_quaternion", frame=frame+1)        
 
 #Usage: press F3 in blender, type br2proj
 class SandboxOp(Operator):
@@ -341,3 +315,6 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(SandboxOp)
+
+#For RAYNE.BFM these animations are very useful.
+#JUMP.ANI RECOVERY_ONBACK_DEFAULT.ANI, COMBO_CIRCLE_KICK.ANI

@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterable
 
 import bpy
 import bpy.types
-from mathutils import Vector, Matrix
+from mathutils import Vector, Matrix, Quaternion
 
 from .sern import sern_read
 from .sern import jexplore
@@ -151,7 +151,7 @@ class _Armature:
 
 
 class bfm_builder:
-    bone_orient = Vector((0, 0, 1)) #TODO only for tests in sandbox
+    bone_orient = Quaternion((1.0, 0.0, 0.0), math.pi / 2.0) #Required by Blender, since a bone can grow only along the Y axis
     @staticmethod
     def build_material(pack:BFM_TexPack, tex_prov:null_tex_provider, name: str | None = None) -> bpy.types.Material: 
         return smb_builder.build_material(pack, tex_prov, name)
@@ -225,12 +225,14 @@ class bfm_builder:
                 parent_head =  bpy_bone.parent.head
 
             rot_mat = Matrix(skb_bone.matrix)
-            pos = Vector(bfm_bones.pos[i])
+            rot_mat = rot_mat @ bfm_builder.bone_orient.to_matrix()
 
-            bpy_bone.head = parent_head+pos
+            pos = Vector(bfm_bones.pos[i])
             #qw = [Vector(bfm_bones.unkown[i].a), Vector(bfm_bones.unkown[i].b)]
             #bpy_utils.create_bound_box(bfm_bones.unkown[i], matryyyyyMatrix.Translation(bpy_bone.head) @ qw)
-            bpy_bone.tail = bpy_bone.head + (rot_mat @ bfm_builder.bone_orient * 0.3)
+            bpy_bone.length = 0.3
+            bpy_bone.matrix = Matrix.Translation(parent_head+pos) @ rot_mat.to_4x4()
+
             #bpy_bone.use_connect=True
             #bpy_bone.head =  parent_head + Vector(bfm_bones.pos[i])
             #bpy_bone.tail = bpy_bone.head + Vector((0,0.2,0))

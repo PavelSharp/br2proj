@@ -110,9 +110,6 @@ class ImportBFM(Operator, ImportHelper):
         if not (tex:=self.get_texture_provider(context)): return {'CANCELLED'}
         if not (skb:=self.get_skb_provider()): return {'CANCELLED'}
 
-        from mathutils import Vector
-        bfm_imp.bfm_builder.bone_orient = Vector((0,0,1)) #TODO Delete it as soon as I can
-
         linker = bfm_imp.bfm_linker(
                         bfm_imp.LinkKinds.bool_to_collection(self.use_collection),
                         grouping=self.use_groups, 
