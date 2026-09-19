@@ -25,8 +25,9 @@ from . import smb
 from . import smb_imp
 import bpy.types
 
-null_tex_prov = tex_imp.null_tex_provider() #
-tex_prov = tex_imp.tex_provider(r'D:\Games\Bloodrayne 2_min\ART')
+base_path = Path('D:/Games/Bloodrayne 2_min')
+null_tex_prov = tex_imp.null_tex_provider()
+tex_prov = tex_imp.tex_provider(base_path / 'ART')
 matr = bpy_utils.axis_conversion('Z', 'Y', change_orient=True).to_4x4() # Matrix.Identity(4)
 
 def smb_test():
@@ -177,23 +178,30 @@ def jlog(*args):
 def _work(self:Operator):
     DO_LOGS = False
     DO_TEXTURES = True
-    ##matr = Matrix.Rotation(math.radians(90.0), 4, 'Y') @ Matrix.Rotation(math.radians(90.0), 4, 'Z')
-    matr = Matrix((
-        (1,0,0,0),
-        (0,0,1,0),
-        (0,1,0,0),
-        (0,0,0,1),
-    ))
+
     #TODO SLEGION.BFM + COMBO1.ANI где-то происходит нежелательная смена знака в угле
 
-    base_path = Path('D:/Games/Bloodrayne 2_min')
     anis = [
-        ('RAYNE.BFM', ['WALK_FORWARD.ANI', 'RUN_FORWARD.ANI', 'POLE_JUMP.ANI', 'POLE_OFF.ANI', 'POLE_GRAB.ANI', 'POLE_DOWN_OFF.ANI', 'POLE_DISMOUNT_TO_WJ_LONG.ANI', 'POLE_LONGJUMP.ANI', 'BITE_STAND_KICK.ANI',  'COMBO_CIRCLE_KICK.ANI', 'RECOVERY_ONBACK_DEFAULT.ANI', 'DOUBLE_JUMP.ANI', 'FEED_REPEL.ANI', 'STAND_ALERT.ANI', 'locked_idle.ANI']),
-        ('SLEGION.BFM', ['WALKS.ANI', 'RUNN.ANI', 'COMBO1.ANI', 'ATTACK01.ANI', 'ATTACK02.ANI', 'BACKEVADEATTACK.ANI']),
+        (
+            ['RAYNE.BFM', 'RAYNE_DRESS.BFM', 'RAYNE_SCHOOLGIRL.BFM', 'RAYNE_COWGIRL.BFM'],
+            ['WALK_FORWARD.ANI', 'RUN_FORWARD.ANI', 'POLE_JUMP.ANI', 'POLE_OFF.ANI', 'POLE_GRAB.ANI', 'POLE_DOWN_OFF.ANI', 'POLE_DISMOUNT_TO_WJ_LONG.ANI', 'POLE_LONGJUMP.ANI', 'BITE_STAND_KICK.ANI',  'COMBO_CIRCLE_KICK.ANI', 'RECOVERY_ONBACK_DEFAULT.ANI', 'DOUBLE_JUMP.ANI', 'FEED_REPEL.ANI', 'STAND_ALERT.ANI', 'locked_idle.ANI']
+        ),
+        (
+            ['FERRIL.BFM'],
+            ['WALK_N.ANI', 'RUN_N.ANI', 'HIGH_JUMP_35.ANI', 'LEAP_ATTACK_KICK.ANI']
+        ),
+        (
+            ['SLEGION.BFM'],
+            ['WALKS.ANI', 'RUNN.ANI', 'COMBO1.ANI', 'ATTACK01.ANI', 'ATTACK02.ANI', 'BACKEVADEATTACK.ANI']
+        ),
+        (
+            ['FOREMAN.BFM'],
+            ['WALK_N.ANI', 'RUN_N.ANI', 'ATTACK_COMBO.ANI', 'ANGRY_SMASH.ANI', 'FEED.ANI']
+        ),
         ]
-    bi, ai = 0,0
-    bfm_path = base_path / 'MODELS' / anis[bi][0]
-    ani_path = base_path / 'ANIMATIONS' / Path(anis[bi][0]).stem / anis[bi][1][ai]
+    ch, bi, ai = 0,0,0
+    bfm_path = base_path / 'MODELS' / anis[ch][0][bi]
+    ani_path = base_path / 'ANIMATIONS' / Path(anis[ch][0][0]).stem / anis[ch][1][ai]
 
     skb_prov = bfm_imp.skb_provider(base_path / 'DATA', load_anims=True)
     linker = bfm_imp.bfm_linker(bfm_imp.LinkKinds.Collection, transform=matr)
