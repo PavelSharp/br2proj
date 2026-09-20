@@ -18,8 +18,8 @@ class SKB_Header:
 
 @sern_dataclass
 class SKB_Bone:
-    name:ascii_str = sernAs(ascii_char * 24)
-    name_hash: int =sernAs(c_uint32) #[NEW 27.03.2025] (according to sub_722EF0)
+    name:ascii_str = sernAs(ascii_char * 24) #May contain uncleared data after the null terminator
+    name_hash: int = sernAs(c_uint32)  #Custom hashing function, see tri_hash in utils.py #[NEW 27.03.2025] (according to sub_722EF0)
     parentBone:int = sernAs(c_int32)  #-1 for the root bone 
     symBone:int = sernAs(c_int32)     #symmetrical bone, -1 for the centric ones    
     matrix: Array[Array[c_float]] = sernAs((c_float*3)*3)   #/? rotation? (what for?) determinants are 1...
@@ -116,6 +116,7 @@ class SKB_File:
 
 # ==[The ranges of the following fields were confirmed by scanning all files BR2GOC and BR2Cut]==
 # SKB_Header.version = 12
+# SKB_Bone.name_hash = tri_hash(str(SKB_Bone.name),0), where tri_hash is described in sub_786230
 # SKB_Anim.next_anim_ind = [-2, -1, ..., SKB_File.numAnims)
 # SKB_Anim.play_frames  = [0...SKB_Anim.numFrames]
 # SKB_Anim.mask = [0, 1, 4], but not for 5 (1|4)
