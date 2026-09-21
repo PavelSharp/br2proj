@@ -184,7 +184,8 @@ def _work(self:Operator):
     anis = [
         (
             ['RAYNE.BFM', 'RAYNE_DRESS.BFM', 'RAYNE_SCHOOLGIRL.BFM', 'RAYNE_COWGIRL.BFM'],
-            ['WALK_FORWARD.ANI', 'RUN_FORWARD.ANI', 'POLE_JUMP.ANI', 'POLE_OFF.ANI', 'POLE_GRAB.ANI', 'POLE_DOWN_OFF.ANI', 'POLE_DISMOUNT_TO_WJ_LONG.ANI', 'POLE_LONGJUMP.ANI', 'BITE_STAND_KICK.ANI',  'COMBO_CIRCLE_KICK.ANI', 'RECOVERY_ONBACK_DEFAULT.ANI', 'DOUBLE_JUMP.ANI', 'FEED_REPEL.ANI', 'STAND_ALERT.ANI', 'locked_idle.ANI']
+            ['brute_grab.ani', 'combo_jk.ani', 'combo_jb.ani', 'pole_turn_left_180.ani', 'pole_horz_salto_release.ani', 'rail_blade_idle.ani', 'rail_slide.ani', 'combo_locked_b_groundstrike.ani', 'bite_stand_blade.ani', 'bite_stand_gun.ani', 'bite_behind_gun_alt.ani', 'bite_stand_gun_alt.ani', 
+             'WALK_FORWARD.ANI', 'RUN_FORWARD.ANI', 'POLE_JUMP.ANI', 'POLE_OFF.ANI', 'POLE_GRAB.ANI', 'POLE_DOWN_OFF.ANI', 'POLE_DISMOUNT_TO_WJ_LONG.ANI', 'POLE_LONGJUMP.ANI', 'BITE_STAND_KICK.ANI',  'COMBO_CIRCLE_KICK.ANI', 'RECOVERY_ONBACK_DEFAULT.ANI', 'DOUBLE_JUMP.ANI', 'FEED_REPEL.ANI', 'STAND_ALERT.ANI', 'locked_idle.ANI']
         ),
         (
             ['FERRIL.BFM'],
@@ -199,7 +200,7 @@ def _work(self:Operator):
             ['WALK_N.ANI', 'RUN_N.ANI', 'ATTACK_COMBO.ANI', 'ANGRY_SMASH.ANI', 'FEED.ANI']
         ),
         ]
-    ch, bi, ai = 0,0,0
+    ch, bi, ai = 0,0,11
     bfm_path = base_path / 'MODELS' / anis[ch][0][bi]
     ani_path = base_path / 'ANIMATIONS' / Path(anis[ch][0][0]).stem / anis[ch][1][ai]
 
@@ -222,7 +223,7 @@ def _work(self:Operator):
     bpy.context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode='POSE')
 
-    action = bpy.data.actions.new(name='ANI_Anim1')
+    action = bpy.data.actions.new(ani_path.stem)
     arm.animation_data_create()
     arm.animation_data.action = action
 
@@ -257,6 +258,7 @@ def _work(self:Operator):
         bpy_bone.keyframe_insert("scale", frame=kf+1)
 
     def add_quat(bpy_bone, kf, ang_x=0, ang_y=0, ang_z=0):
+        bpy_bone.rotation_mode = 'QUATERNION'
         # In accordance with sub_7227A0, Euler angles are used only for
         # compact storage, which are then converted by the engine into quaternion
         quat = Euler((-ang_y,ang_x,-ang_z), 'ZXY').to_quaternion()
@@ -268,16 +270,12 @@ def _work(self:Operator):
         bpy_bone = arm.pose.bones[sym(str(ani_bone.name))]
 
         for k in range(ani_bone.numKeyFrames):
-            bpy_bone.rotation_mode = 'QUATERNION'
-
             if tt in[0,1]:
                 ts = 16
                 kf, x, y, z = struct.unpack("ifff", bytes(ani.animPool[pool_ind:pool_ind + ts]))
                 check_kf(kf)
-                if tt == 0:
-                    add_pos(bpy_bone, kf, x, y, z)
-                elif tt == 1:
-                    add_scale(bpy_bone, kf, x, y, z)
+                if tt == 0: add_pos(bpy_bone, kf, x, y, z)
+                elif tt == 1: add_scale(bpy_bone, kf, x, y, z)
 
             elif tt in [2,3,4]:
                 ts = 4
@@ -302,11 +300,43 @@ def _work(self:Operator):
             pool_ind += ts
 
         pool_ind = (pool_ind + 3) & ~3
+    main_pool_end = pool_ind
 
-    if pool_ind!=ani.header.animPoolSize: #TODO extra data RUN_FORWARD?
+    root_bone = next(b for b in arm.pose.bones if b.parent is None) #Note. We assume the existence of root motion bone
+    for i in range(ani.root_pos_frames):
+        ts = 16
+        kf, x, y, z = struct.unpack("ifff", bytes(ani.animPool[pool_ind:pool_ind + ts]))
+        v = matr @ Vector((x,y,z))
+        add_pos(root_bone, kf, v.x, v.y, v.z)
+        pool_ind += ts
+
+    for i in range(ani.root_rot_frames):
+        ts = 8
+        vl = struct.unpack("hhhh", bytes(ani.animPool[pool_ind:pool_ind + ts]))
+        kf, ang1, ang2, ang3 = unp(*vl)
+        add_quat(root_bone, kf, ang_x=ang1, ang_y=ang2, ang_z=ang3)        
+        pool_ind += ts
+
+    for entry in ani.unk1:
+        if entry.a > 0:
+            pool_ind += entry.a * 16
+            pool_ind = (pool_ind + 3) & ~3
+            
+        if entry.b > 0:
+            pool_ind += entry.b * 8
+            pool_ind = (pool_ind + 3) & ~3
+            
+        if entry.c > 0:
+            pool_ind += entry.c * 4
+            pool_ind = (pool_ind + 3) & ~3
+
+    if pool_ind!=ani.header.animPoolSize: #TODO[Done] extra data RUN_FORWARD?
         self.report({'WARNING'}, 'Warring. The pool has not been exhausted. See in console')
-        print(f'pool_ind={pool_ind}, header_pool_size={ani.header.animPoolSize}')
+        print(f'main_pool_end={main_pool_end} pool_ind={pool_ind}, header_pool_size={ani.header.animPoolSize}')
+    else:
+        print(f'Success! Пул исчерпан корректно: {pool_ind}/{ani.header.animPoolSize}')
 
+    bpy.ops.object.mode_set(mode='OBJECT')
 
 #Usage: press F3 in blender, type br2proj
 class SandboxOp(Operator):

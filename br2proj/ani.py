@@ -36,8 +36,8 @@ class ANI_File:
     header:ANI_Header
     animPool:list[int] = sernAs(list[c_uint8], rarg=KnownArg('header').animPoolSize)
     used_bones: list[ANI_BoneEntry] = sernAs(rarg=KnownArg('header').numBonesUsed)
-    a:int = sernAs(c_int32) #(0/5)
-    b:int = sernAs(c_int32) #(0)
+    root_pos_frames:int = sernAs(c_int32) #[EXPI 21.09.2026] #(0/5)
+    root_rot_frames:int = sernAs(c_int32) #[EXPI 21.09.2026] #(0)
     unk1: list[ANI_BoneEntry2] = sernAs(rarg=KnownArg('header').numBonesUsed2)
 
 #Присутсвует ANI_BoneEntry2

@@ -160,49 +160,6 @@ class bfm_builder:
     def load_textures_only(pack:BFM_TexPack, tex_prov:null_tex_provider):
         return smb_builder.load_textures_only(pack, tex_prov)
 
-#    @staticmethod
-#     def build_armature(name, bfm_bones, skb_bones):
-#         arm = bpy.data.armatures.new(name)
-#         obj = _Armature(bpy.data.objects.new(name, arm))
-#         bpy.context.scene.collection.objects.link(obj.arm_obj)
-
-#         bpy.context.view_layer.objects.active = obj.arm_obj
-#         bpy.ops.object.mode_set(mode='EDIT')
-
-#         # Left-handed → Right-handed + align to Blender upright
-#         LH_to_RH = Matrix((
-#             (-1, 0, 0),
-#             ( 0, 1, 0),
-#             ( 0, 0, 1)
-#         ))
-#         Rotate_X90 = Matrix.Rotation(math.radians(90.0), 3, 'X')
-#         Coord = Rotate_X90 @ LH_to_RH
-
-#         for i, skb in enumerate(skb_bones):
-#             parent = skb.parentBone
-#             bone = arm.edit_bones.new(str(skb.name))
-
-#             # convert bone head (local bind position)
-#             head = Coord @ Vector(bfm_bones.pos[i])
-
-#             if parent != -1:
-#                 bone.parent = arm.edit_bones[parent]
-#                 head = bone.parent.tail + head
-
-#             # convert rotation matrix
-#             rot = Matrix(skb.matrix)
-#             rot = Coord @ rot @ Coord.inverted()
-
-#             # bone axis in Blender goes along +Y
-#             axis = rot @ Vector((0, -0.3, 0))
-
-#             bone.head = head
-#             bone.tail = head + axis
-#             obj.bone_names.append(bone.name)
-
-#         bpy.ops.object.mode_set(mode='OBJECT')
-#         return obj
-
     @staticmethod
     def build_armature(name:str, bfm_bones:BFM_Bones, skb_bones:list[SKB_Bone]) -> _Armature:
         #TODO сравнить количесвто костей
@@ -213,16 +170,22 @@ class bfm_builder:
         bpy.context.view_layer.objects.active = ret_arm.arm_obj
         bpy.ops.object.mode_set(mode='EDIT')
         
+        BONE_LENGTH = 0.3
+
+        parents = []
         for i, skb_bone in enumerate(skb_bones):
             parent_ind = skb_bone.parentBone
             if parent_ind>=i: raise ValueError("Bones was not sorted")
 
             #extra = f't:{bfm_bones.bone_type[i]}, c:{str(skb_bones[bfm_bones.child_ind[i]].name)}'
             bpy_bone = arm.edit_bones.new(str(skb_bone.name))
-            parent_head = Vector((0,0,0))
+            #bpy_bone.parent =  arm.edit_bones[parent_ind+1] if parent_ind!=-1 else None
             if parent_ind!=-1:
                 bpy_bone.parent = arm.edit_bones[parent_ind]
                 parent_head =  bpy_bone.parent.head
+            else:
+                parents.append(bpy_bone)
+                parent_head = Vector((0,0,0))
 
             rot_mat = Matrix(skb_bone.matrix)
             rot_mat = rot_mat @ bfm_builder.bone_orient.to_matrix()
@@ -230,7 +193,7 @@ class bfm_builder:
             pos = Vector(bfm_bones.pos[i])
             #qw = [Vector(bfm_bones.unkown[i].a), Vector(bfm_bones.unkown[i].b)]
             #bpy_utils.create_bound_box(bfm_bones.unkown[i], matryyyyyMatrix.Translation(bpy_bone.head) @ qw)
-            bpy_bone.length = 0.3
+            bpy_bone.length = BONE_LENGTH
             bpy_bone.matrix = Matrix.Translation(parent_head+pos) @ rot_mat.to_4x4()
 
             #bpy_bone.use_connect=True
@@ -238,6 +201,13 @@ class bfm_builder:
             #bpy_bone.tail = bpy_bone.head + Vector((0,0.2,0))
             ret_arm.bone_names.append(bpy_bone.name)
         
+        #TODO[Done] What if such a bone already exists inside skb_bones?
+        #Create a fake bone for Root Motion to keep the Armature Object's transform unoccupied, allowing free manual positioning.
+        root_bone = arm.edit_bones.new('root_bone')
+        root_bone.length = BONE_LENGTH
+        root_bone.matrix = bfm_builder.bone_orient.to_matrix().to_4x4()
+        for bone in parents: bone.parent = root_bone
+
         bpy.ops.object.mode_set(mode='OBJECT')
         return ret_arm
 
@@ -275,6 +245,9 @@ class bfm_builder:
     def apply_armature(bpy_obj:bpy.types.Object, bone_dict:_BoneDict, arm:_Armature):
         bpy_arm_mod = bpy_obj.modifiers.new(name='Armature', type='ARMATURE')
         bpy_arm_mod.object = arm.arm_obj
+        #TODO set parent for arm_obj
+        #bpy_obj.parent = arm.arm_obj 
+        #bpy_obj.matrix_local = Matrix() 
         for bone_ind, wi_dict in bone_dict.items():
             bpy_vg = bpy_obj.vertex_groups.new(name=arm.bone_name(bone_ind))
             for wight, inds in wi_dict.items():
