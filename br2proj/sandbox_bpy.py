@@ -8,6 +8,8 @@ import struct
 
 from . import bfm_imp
 from . import tex_imp
+from . import ani_imp
+
 from mathutils import Vector, Matrix, Quaternion, Euler
 import math
 from math import pi
@@ -179,9 +181,15 @@ def _work(self:Operator):
     DO_LOGS = False
     DO_TEXTURES = True
 
-    #TODO SLEGION.BFM + COMBO1.ANI где-то происходит нежелательная смена знака в угле
+    #TODO default armature name should be in format RIG-rayne
+    #TODO [Попробовать make_compatible()] SLEGION.BFM + COMBO1.ANI где-то происходит нежелательная смена знака в угле
 
     anis = [
+        (
+            ['BRUTE.BFM'],
+            ['ANGRY_SMASH.ANI', 'HURT_FRONT.ANI']
+        )
+        ,
         (
             ['RAYNE.BFM', 'RAYNE_DRESS.BFM', 'RAYNE_SCHOOLGIRL.BFM', 'RAYNE_COWGIRL.BFM'],
             ['brute_grab.ani', 'combo_jk.ani', 'combo_jb.ani', 'pole_turn_left_180.ani', 'pole_horz_salto_release.ani', 'rail_blade_idle.ani', 'rail_slide.ani', 'combo_locked_b_groundstrike.ani', 'bite_stand_blade.ani', 'bite_stand_gun.ani', 'bite_behind_gun_alt.ani', 'bite_stand_gun_alt.ani', 
@@ -200,7 +208,7 @@ def _work(self:Operator):
             ['WALK_N.ANI', 'RUN_N.ANI', 'ATTACK_COMBO.ANI', 'ANGRY_SMASH.ANI', 'FEED.ANI']
         ),
         ]
-    ch, bi, ai = 0,0,11
+    ch, bi, ai = 1,0,0
     bfm_path = base_path / 'MODELS' / anis[ch][0][bi]
     ani_path = base_path / 'ANIMATIONS' / Path(anis[ch][0][0]).stem / anis[ch][1][ai]
 
@@ -211,7 +219,8 @@ def _work(self:Operator):
     bfm:BFM_File = sern_read.reader.read_all(bfm_path, BFM_File)
     skb, skb_path = skb_prov.provide(str(bfm.header.skb_name), True)
     ani:ANI_File = sern_read.reader.read_all(ani_path, ANI_File)
-    if DO_LOGS: jlog(skb, skb_path, ani, ani_path)
+    if DO_LOGS: 
+        jlog(skb, skb_path, ani, ani_path)
 
 
     coll = loader.load((bfm, bfm_path.stem))
@@ -229,16 +238,12 @@ def _work(self:Operator):
 
     fps = 24 
     numFrames = ani.header.numFrames
-    pool_ind = 0 
+    pool_cursor =  ani_imp.PoolCursor()
 
     def check_kf(kf):
         if kf<0 or kf>=ani.header.numFrames:
             raise ValueError(f"Keyframe err, kf was {kf}")
-
-    def unp(kf, *args):
-        check_kf(kf)
-        return kf, *tuple(arg / 32768.0 * math.pi for arg in args)
-
+        
     def sym(name:str):
         for bone in skb.bones:
            if ( bone.symBone!=-1 and str(bone.name)==name):
@@ -246,95 +251,73 @@ def _work(self:Operator):
         return name
 
     #[24.04.2025, IMPORTANT] See Nocturne/Editor/doc/Editor.pdf Coordinate System for more details about it
-
     bone_orient = bfm_imp.bfm_builder.bone_orient.inverted()
 
-    def add_pos(bpy_bone, kf, x, y, z):
-        bpy_bone.location = bone_orient @ Vector((z,x,y))
+    def add_pos(bpy_bone, kf, v:Vector):
+        bpy_bone.location = bone_orient @ Vector((v.z,v.x,v.y))
         bpy_bone.keyframe_insert("location", frame=kf+1)
 
-    def add_scale(bpy_bone, kf, x, y, z):
-        bpy_bone.scale = Vector((x, y, z))
+    def add_scale(bpy_bone, kf, v:Vector):
+        bpy_bone.scale = v
         bpy_bone.keyframe_insert("scale", frame=kf+1)
 
-    def add_quat(bpy_bone, kf, ang_x=0, ang_y=0, ang_z=0):
+    def add_quat(bpy_bone, kf, v:Vector):
         bpy_bone.rotation_mode = 'QUATERNION'
         # In accordance with sub_7227A0, Euler angles are used only for
         # compact storage, which are then converted by the engine into quaternion
-        quat = Euler((-ang_y,ang_x,-ang_z), 'ZXY').to_quaternion()
+        quat = Euler((-v.y,v.x,-v.z), 'ZXY').to_quaternion()
         bpy_bone.rotation_quaternion = bone_orient @ quat @ bone_orient.inverted()
         bpy_bone.keyframe_insert("rotation_quaternion", frame=kf+1)
-    #According to sub_721820, which parses the ANI file
+    
+    def add_ani_frame(bpy_bone, kf:int, type: ani_imp.PoolEntityType, v:Vector):
+        match type:
+            case 'POS':add_pos(bpy_bone, kf, v)
+            case 'SCALE':add_scale(bpy_bone, kf, v)
+            case 'EULER': add_quat(bpy_bone, kf, v)
+            case _: assert_never(ent.type)    
+
+    pool_bytes = bytes(ani.animPool)
     for ani_bone in ani.used_bones:
         tt = ani_bone.tt
         bpy_bone = arm.pose.bones[sym(str(ani_bone.name))]
-
         for k in range(ani_bone.numKeyFrames):
-            if tt in[0,1]:
-                ts = 16
-                kf, x, y, z = struct.unpack("ifff", bytes(ani.animPool[pool_ind:pool_ind + ts]))
-                check_kf(kf)
-                if tt == 0: add_pos(bpy_bone, kf, x, y, z)
-                elif tt == 1: add_scale(bpy_bone, kf, x, y, z)
+            pool_entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_imp.TrackType(tt))
+            add_ani_frame(bpy_bone, pool_entity.kf, pool_entity.type, pool_entity.vec)
+        pool_cursor.next_track()
 
-            elif tt in [2,3,4]:
-                ts = 4
-                vl = struct.unpack("hh", bytes(ani.animPool[pool_ind:pool_ind + ts]))
-                kf, ang = unp(*vl)
-                if tt == 2: add_quat(bpy_bone, kf, ang_x=ang)
-                elif tt == 3: add_quat(bpy_bone, kf, ang_y=ang)
-                elif tt == 4: add_quat(bpy_bone, kf, ang_z=ang)
-
-            elif tt in [5,6,7]:
-                ts = 6
-                vl = struct.unpack("hhh", bytes(ani.animPool[pool_ind:pool_ind + ts]))
-                kf, ang1, ang2 = unp(*vl)
-                if tt == 5:   add_quat(bpy_bone, kf, ang_x=ang1, ang_y=ang2)  # XY
-                elif tt == 6: add_quat(bpy_bone, kf, ang_y=ang1, ang_z=ang2)  # YZ
-                elif tt == 7: add_quat(bpy_bone, kf, ang_x=ang1, ang_z=ang2)  # XZ
-            elif tt == 8:
-                ts = 8
-                vl = struct.unpack("hhhh", bytes(ani.animPool[pool_ind:pool_ind + ts]))
-                kf, ang1, ang2, ang3 = unp(*vl)
-                add_quat(bpy_bone, kf, ang_x=ang1, ang_y=ang2, ang_z=ang3)
-            pool_ind += ts
-
-        pool_ind = (pool_ind + 3) & ~3
-    main_pool_end = pool_ind
+    main_pool_end = ani_imp.PoolCursor(pool_cursor.pos)
 
     root_bone = next(b for b in arm.pose.bones if b.parent is None) #Note. We assume the existence of root motion bone
     for i in range(ani.root_pos_frames):
-        ts = 16
-        kf, x, y, z = struct.unpack("ifff", bytes(ani.animPool[pool_ind:pool_ind + ts]))
-        v = matr @ Vector((x,y,z))
-        add_pos(root_bone, kf, v.x, v.y, v.z)
-        pool_ind += ts
-
+        entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_imp.TrackType.POS)
+        add_pos(root_bone, entity.kf, matr @ entity.vec)
+    
+    pool_cursor.next_track()
+    
     for i in range(ani.root_rot_frames):
-        ts = 8
-        vl = struct.unpack("hhhh", bytes(ani.animPool[pool_ind:pool_ind + ts]))
-        kf, ang1, ang2, ang3 = unp(*vl)
-        add_quat(root_bone, kf, ang_x=ang1, ang_y=ang2, ang_z=ang3)        
-        pool_ind += ts
+        entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_imp.TrackType.ROT)
+        add_quat(root_bone, entity.kf, entity.vec)
+
+    pool_cursor.next_track()
 
     for entry in ani.unk1:
         if entry.a > 0:
-            pool_ind += entry.a * 16
-            pool_ind = (pool_ind + 3) & ~3
+            pool_cursor.pos += entry.a * 16
+            pool_cursor.next_track()
             
         if entry.b > 0:
-            pool_ind += entry.b * 8
-            pool_ind = (pool_ind + 3) & ~3
+            pool_cursor.pos += entry.b * 8
+            pool_cursor.next_track()
             
         if entry.c > 0:
-            pool_ind += entry.c * 4
-            pool_ind = (pool_ind + 3) & ~3
+            pool_cursor.pos += entry.c * 16
+            pool_cursor.next_track()
 
-    if pool_ind!=ani.header.animPoolSize: #TODO[Done] extra data RUN_FORWARD?
+    if pool_cursor.pos!=ani.header.animPoolSize: #TODO[Done] extra data RUN_FORWARD?
         self.report({'WARNING'}, 'Warring. The pool has not been exhausted. See in console')
-        print(f'main_pool_end={main_pool_end} pool_ind={pool_ind}, header_pool_size={ani.header.animPoolSize}')
+        print(f'main_pool_end={main_pool_end} pool_ind={pool_cursor.pos}, header_pool_size={ani.header.animPoolSize}')
     else:
-        print(f'Success! Пул исчерпан корректно: {pool_ind}/{ani.header.animPoolSize}')
+        print(f'Success! Пул исчерпан корректно: {pool_cursor.pos}/{ani.header.animPoolSize}')
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
