@@ -192,7 +192,7 @@ def _work(self:Operator):
         ,
         (
             ['RAYNE.BFM', 'RAYNE_DRESS.BFM', 'RAYNE_SCHOOLGIRL.BFM', 'RAYNE_COWGIRL.BFM'],
-            ['brute_grab.ani', 'combo_jk.ani', 'combo_jb.ani', 'pole_turn_left_180.ani', 'pole_horz_salto_release.ani', 'rail_blade_idle.ani', 'rail_slide.ani', 'combo_locked_b_groundstrike.ani', 'bite_stand_blade.ani', 'bite_stand_gun.ani', 'bite_behind_gun_alt.ani', 'bite_stand_gun_alt.ani', 
+            ['LOCKED_WALK_LEFT.ANI', 'brute_grab.ani', 'combo_jk.ani', 'combo_jb.ani', 'pole_turn_left_180.ani', 'pole_horz_salto_release.ani', 'rail_blade_idle.ani', 'rail_slide.ani', 'combo_locked_b_groundstrike.ani', 'bite_stand_blade.ani', 'bite_stand_gun.ani', 'bite_behind_gun_alt.ani', 'bite_stand_gun_alt.ani', 
              'WALK_FORWARD.ANI', 'RUN_FORWARD.ANI', 'POLE_JUMP.ANI', 'POLE_OFF.ANI', 'POLE_GRAB.ANI', 'POLE_DOWN_OFF.ANI', 'POLE_DISMOUNT_TO_WJ_LONG.ANI', 'POLE_LONGJUMP.ANI', 'BITE_STAND_KICK.ANI',  'COMBO_CIRCLE_KICK.ANI', 'RECOVERY_ONBACK_DEFAULT.ANI', 'DOUBLE_JUMP.ANI', 'FEED_REPEL.ANI', 'STAND_ALERT.ANI', 'locked_idle.ANI']
         ),
         (
@@ -254,7 +254,7 @@ def _work(self:Operator):
     bone_orient = bfm_imp.bfm_builder.bone_orient.inverted()
 
     def add_pos(bpy_bone, kf, v:Vector):
-        bpy_bone.location = bone_orient @ Vector((v.z,v.x,v.y))
+        bpy_bone.location = bone_orient @ v.zxy
         bpy_bone.keyframe_insert("location", frame=kf+1)
 
     def add_scale(bpy_bone, kf, v:Vector):
@@ -278,10 +278,9 @@ def _work(self:Operator):
 
     pool_bytes = bytes(ani.animPool)
     for ani_bone in ani.used_bones:
-        tt = ani_bone.tt
         bpy_bone = arm.pose.bones[sym(str(ani_bone.name))]
         for k in range(ani_bone.numKeyFrames):
-            pool_entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_imp.TrackType(tt))
+            pool_entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_imp.TrackType(ani_bone.tt))
             add_ani_frame(bpy_bone, pool_entity.kf, pool_entity.type, pool_entity.vec)
         pool_cursor.next_track()
 
@@ -290,7 +289,7 @@ def _work(self:Operator):
     root_bone = next(b for b in arm.pose.bones if b.parent is None) #Note. We assume the existence of root motion bone
     for i in range(ani.root_pos_frames):
         entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_imp.TrackType.POS)
-        add_pos(root_bone, entity.kf, matr @ entity.vec)
+        add_pos(root_bone, entity.kf, entity.vec.yzx) #Tests: combo_jk, RUN_FORWARD, LOCKED_WALK_LEFT, POLE_JUMP
     
     pool_cursor.next_track()
     
