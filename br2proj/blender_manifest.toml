@@ -37,5 +37,6 @@ paths_exclude_pattern = [
    "/.git/",
    "/*.zip",
    "/sandbox_bpy.py",
-   "/sandbox_py.py"
+   "/sandbox_py.py",
+   "/sandbox_skeleton.py"
 ]

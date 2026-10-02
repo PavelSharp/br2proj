@@ -5,6 +5,7 @@ from mathutils import Matrix, Vector
 from collections.abc import Iterable
 from .sern.fixed_types import box3d
 from collections.abc import Sequence
+from contextlib import contextmanager
 import mathutils
 #TODO метод для выравнивания origin
 
@@ -90,6 +91,18 @@ def axis_conversion(from_forward='Y', from_up='Z', to_forward='Y', to_up='Z', ch
     return ret
         
     
+
+@contextmanager
+def restored_playhead(target_frame: int | float | None = None):
+    src_frame = bpy.context.scene.frame_current
+    src_subframe = bpy.context.scene.frame_subframe
+    if target_frame is not None:
+        fr, subfr = divmod(target_frame, 1)
+        bpy.context.scene.frame_set(int(fr), subframe=subfr)
+    try:
+        yield
+    finally:
+        bpy.context.scene.frame_set(src_frame, subframe=src_subframe)
 
 #================================
 #		  COLLECTION API
