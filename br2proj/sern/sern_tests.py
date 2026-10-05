@@ -353,6 +353,102 @@ class testSernReader(unittest.TestCase):
     def testDataClass(self):
         pass
 
+Matr2x3RM = Matrixf[2, 3, 'rm']
+Matr3x2RM = Matrixf[3, 2, 'rm']
+    
+Matr2x3CM = Matrixf[2, 3, 'cm']
+Matr3x2CM = Matrixf[3, 2, 'cm']
+
+class testMatrix(unittest.TestCase):
+    @staticmethod
+    def flat(d): return [v for dd in d for v in dd]
+
+    def matr_eql(self, lhs:Matrix, rhs:Matrix):
+        self.assertEqual(lhs.r_count, rhs.r_count, 'Rows mismatch!')
+        self.assertEqual(lhs.c_count, rhs.c_count, 'Columns mismatch!')
+        self.assertEqual(lhs.order, rhs.order, 'Order mismatch!')                
+        self.assertEqual(lhs._type_, rhs._type_, 'Element type mismatch!')
+        self.assertListEqual(list(lhs), list(rhs), 'Data mismatch!')
+        self.assertIs(type(lhs), type(rhs), 'Matrix types are not cached!')
+        #self.assertEqual(ctypes.sizeof(lhs), ctypes.sizeof(rhs), 'ctypes sizeof mismatch!')
+        #self.assertEqual(lhs._length_, rhs._length_, 'ctypes _length_ mismatch!')
+
+
+    def testTranspose(self):
+        i = Matr2x3RM(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
+        o = Matr3x2RM(1.0, 4.0, 2.0, 5.0, 3.0, 6.0)
+        self.matr_eql(i.transposed(), o)
+
+        i = Matr3x2RM(1.0, 4.0, 2.0, 5.0, 3.0, 6.0)
+        o = Matr2x3RM(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
+        self.matr_eql(i.transposed(), o)
+
+        i = Matr2x3CM(1.0, 4.0, 2.0, 5.0, 3.0, 6.0)
+        o = Matr3x2CM(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
+        self.matr_eql(i.transposed(), o)
+
+        i = Matr3x2CM(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
+        o = Matr2x3CM(1.0, 4.0, 2.0, 5.0, 3.0, 6.0)
+        self.matr_eql(i.transposed(), o)
+
+    def testFlat(self):
+        d2x3rm = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        d2x3cm = [1.0, 4.0, 2.0, 5.0, 3.0, 6.0] 
+        d3x2rm = [1.0, 4.0, 2.0, 5.0, 3.0, 6.0] 
+        d3x2cm = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+
+        def check(matrix_cls, data, ord, exp):
+            with self.subTest(matrix=matrix_cls.__name__, ord=ord):
+                matr = matrix_cls(*exp)
+                self.matr_eql(matrix_cls.from_flat(data, ord), matr)
+                self.assertListEqual(list(matr.to_flat(ord)), list(data))
+
+        check(Matr2x3RM, d2x3rm, 'rm', d2x3rm)
+        check(Matr2x3RM, d2x3cm, 'cm', d2x3rm)
+        check(Matr3x2RM, d3x2rm, 'rm', d3x2rm)
+        check(Matr3x2RM, d3x2cm, 'cm', d3x2rm)
+
+        check(Matr2x3CM, d2x3rm, 'rm', d2x3cm)
+        check(Matr2x3CM, d2x3cm, 'cm', d2x3cm)
+        check(Matr3x2CM, d3x2rm, 'rm', d3x2cm)
+        check(Matr3x2CM, d3x2cm, 'cm', d3x2cm)
+
+    def testFromRowsCols(self):
+        rows2x3 = ((1.0, 2.0, 3.0), (4.0, 5.0, 6.0))
+        cols2x3 = ((1.0, 4.0), (2.0, 5.0), (3.0, 6.0))
+        rows3x2 = ((1.0, 4.0), (2.0, 5.0), (3.0, 6.0))
+        cols3x2 = ((1.0, 2.0, 3.0), (4.0, 5.0, 6.0))
+
+        def check(matrix_cls, rows, cols):
+            with self.subTest(matrix=matrix_cls.__name__):
+                data = rows if matrix_cls.order == 'rm' else cols
+                o = matrix_cls(*self.flat(data))
+                self.matr_eql(matrix_cls.from_rows(rows), o)
+                self.matr_eql(matrix_cls.from_cols(cols), o) 
+
+        check(Matr2x3RM, rows2x3, cols2x3)
+        check(Matr3x2RM, rows3x2, cols3x2)
+        check(Matr2x3CM, rows2x3, cols2x3)
+        check(Matr3x2CM, rows3x2, cols3x2)
+
+    def testRowsCols(self):
+        rows2x3 = ((1.0, 2.0, 3.0), (4.0, 5.0, 6.0))
+        cols2x3 = ((1.0, 4.0), (2.0, 5.0), (3.0, 6.0))
+        rows3x2 = ((1.0, 4.0), (2.0, 5.0), (3.0, 6.0))
+        cols3x2 = ((1.0, 2.0, 3.0), (4.0, 5.0, 6.0))
+
+        def check(matrix_cls, rows, cols):
+            with self.subTest(matrix=matrix_cls.__name__):
+                data = rows if matrix_cls.order == 'rm' else cols
+                matr = matrix_cls(*self.flat(data))
+                self.assertTupleEqual(matr.rows, rows, 'Incorrect .rows!')
+                self.assertTupleEqual(matr.cols, cols, 'Incorrect .cols!')
+
+        check(Matr2x3RM, rows2x3, cols2x3)
+        check(Matr3x2RM, rows3x2, cols3x2)
+        check(Matr2x3CM, rows2x3, cols2x3)
+        check(Matr3x2CM, rows3x2, cols3x2)
+
 # class foo:
 #     arr1:npt.NDArray[np.int32] = np.zeros((3,3), np.int32)
 #     arr2:npt.NDArray[typing.Any] = np.array([1,2,3], dtype=np.int32)

@@ -187,14 +187,14 @@ class bfm_builder:
                 parents.append(bpy_bone)
                 parent_head = Vector((0,0,0))
 
-            rot_mat = Matrix(skb_bone.matrix)
+            rot_mat = Matrix(skb_bone.matrix.rows)
             rot_mat = rot_mat @ bfm_builder.bone_orient.to_matrix()
 
             pos = Vector(bfm_bones.pos[i])
             #qw = [Vector(bfm_bones.unkown[i].a), Vector(bfm_bones.unkown[i].b)]
             #bpy_utils.create_bound_box(bfm_bones.unkown[i], matryyyyyMatrix.Translation(bpy_bone.head) @ qw)
             bpy_bone.length = BONE_LENGTH
-            bpy_bone.matrix = Matrix.Translation(parent_head+pos) @ rot_mat.to_4x4()
+            bpy_bone.matrix = Matrix.LocRotScale(parent_head+pos, rot_mat, None)
 
             #bpy_bone.use_connect=True
             #bpy_bone.head =  parent_head + Vector(bfm_bones.pos[i])

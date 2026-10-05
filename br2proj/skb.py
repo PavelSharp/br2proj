@@ -22,7 +22,7 @@ class SKB_Bone:
     name_hash: int = sernAs(c_uint32)  #Custom hashing function, see tri_hash in utils.py #[NEW 27.03.2025] (according to sub_722EF0)
     parentBone:int = sernAs(c_int32)  #-1 for the root bone 
     symBone:int = sernAs(c_int32)     #symmetrical bone, -1 for the centric ones    
-    matrix: Array[Array[c_float]] = sernAs((c_float*3)*3)   #/? rotation? (what for?) determinants are 1...
+    matrix: Matrixf3x3RM              #/? rotation? (what for?) determinants are 1...
     #умножение на транспонированную к самой себе = единичная матрица - эта матрица вращения
 
 

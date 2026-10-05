@@ -196,7 +196,7 @@ class SMB_Header:
 @dataclass
 class SMB_Header2:
     ints1:Annotated[list[int], sernAs(c_int*5)]
-    ints2:Annotated[list[int], sernAs(list[c_int], read_args=(10,))]
+    ints2:Annotated[list[int], sernAs(list[c_int], rargs=(10,))]
     ints3:c_int32
     pass
 
