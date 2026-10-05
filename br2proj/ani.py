@@ -2,12 +2,24 @@
 #     BR2 3D FILE FORMATS DOCUMENT
 #     by BloodHammer (Mjolnir) (v1.19 - 15.01.2006)
 #Available at https://gamebanana.com/tools/18225 (Thanks KillerExe_01 for published it)
+from enum import IntEnum
 
 from .sern import sern_core
 from .sern.sern_core import sernAs, KnownArg
 from .sern.sern_read import sern_dataclass, le_fixed_dataclass as fixed_dataclass
 from .sern import sern_read
 from .sern.fixed_types import *
+
+class AniTrackType(IntEnum):
+    POS         = 0
+    SCALE       = 1
+    ROT_X       = 2
+    ROT_Y       = 3
+    ROT_Z       = 4
+    ROT_XY      = 5
+    ROT_YZ      = 6
+    ROT_XZ      = 7
+    ROT         = 8
 
 @fixed_dataclass
 class ANI_Header:
@@ -20,8 +32,10 @@ class ANI_Header:
 @fixed_dataclass
 class ANI_BoneEntry:
     name:ascii_str = sernAs(ascii_char*24)
-    tt:int = sernAs(c_int32) #/? transformation type (0..8)
+    tt_raw:int = sernAs(c_int32) #/? transformation type (0..8)
     numKeyFrames:int = sernAs(c_int32)
+    @property
+    def tt(self): return AniTrackType(self.tt_raw)
 
 @fixed_dataclass
 class ANI_BoneEntry2: #?? binding of some sort??
@@ -33,6 +47,9 @@ class ANI_BoneEntry2: #?? binding of some sort??
 
 @sern_dataclass
 class ANI_File:
+    ROOT_POS_TRACK_TYPE = AniTrackType.POS
+    ROOT_ROT_TRACK_TYPE = AniTrackType.ROT
+
     header:ANI_Header
     animPool:list[int] = sernAs(list[c_uint8], rarg=KnownArg('header').animPoolSize)
     used_bones: list[ANI_BoneEntry] = sernAs(rarg=KnownArg('header').numBonesUsed)

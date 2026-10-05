@@ -280,7 +280,7 @@ def _work(self:Operator):
     for ani_bone in ani.used_bones:
         bpy_bone = arm.pose.bones[sym(str(ani_bone.name))]
         for k in range(ani_bone.numKeyFrames):
-            pool_entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_imp.TrackType(ani_bone.tt))
+            pool_entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_bone.tt)
             add_ani_frame(bpy_bone, pool_entity.kf, pool_entity.type, pool_entity.vec)
         pool_cursor.next_track()
 
@@ -288,13 +288,13 @@ def _work(self:Operator):
 
     root_bone = next(b for b in arm.pose.bones if b.parent is None) #Note. We assume the existence of root motion bone
     for i in range(ani.root_pos_frames):
-        entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_imp.TrackType.POS)
+        entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ANI_File.ROOT_POS_TRACK_TYPE)
         add_pos(root_bone, entity.kf, entity.vec.yzx) #Tests: combo_jk, RUN_FORWARD, LOCKED_WALK_LEFT, POLE_JUMP
     
     pool_cursor.next_track()
     
     for i in range(ani.root_rot_frames):
-        entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_imp.TrackType.ROT)
+        entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ANI_File.ROOT_ROT_TRACK_TYPE)
         add_quat(root_bone, entity.kf, entity.vec)
 
     pool_cursor.next_track()

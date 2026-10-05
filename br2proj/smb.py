@@ -23,21 +23,6 @@ class SMB_Header:
     @property
     def is_animated(self): return self.numFrames>1 or self.numEmitters>0
 
-# @dataclass
-# @sern_read.allow_sernAs
-# class QW:
-#     version: int = sernAs(c_int32) | 5.7
-
-# import dataclasses
-# @dataclass
-# class QW2:
-#     version: int = dataclasses.field(default=4)
-
-# QW2()
-# q = QW()
-# import typing
-# print(typing.get_type_hints(SMB_Header, include_extras=True))
-# assert q.version==8
 
 @fixed_dataclass
 class SMB_TexPack:

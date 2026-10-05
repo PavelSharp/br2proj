@@ -27,7 +27,7 @@ LittleEndianStructure = ctypes.LittleEndianStructure
 BigEndianStructure = ctypes.BigEndianStructure
 
 c_ushort = ctypes.c_ushort
-c_short = ctypes.c_ushort
+c_short = ctypes.c_short
 
 c_int = ctypes.c_int
 c_uint = ctypes.c_uint

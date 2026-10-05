@@ -81,7 +81,7 @@ class TEXBr2_Header(TEX_Header):
 
 @sern_dataclass
 class SelectebleTexHeader:
-    version:BrVersion = sernAs(c_int32, rvalidator=Validators.try_map(lambda val: BrVersion(val)))
+    version:BrVersion = sernAs(c_int32, rvalidator=Validators.try_map(BrVersion))
     @classmethod
     def sern_read(cls, rdr:sern_read.reader) -> TEX_Header:
         #TODO разрешить что-то наподобие, для этой задачи ввести похожий тип на SernAs

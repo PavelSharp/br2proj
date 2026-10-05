@@ -1,22 +1,11 @@
 from typing import NamedTuple, Literal, assert_never
-from enum import IntEnum
 from dataclasses import dataclass
 import struct
 import math
 
 from mathutils import Vector
 
-#TODO use this type in ANI_BoneEntry.tt, after sern will be support it
-class TrackType(IntEnum):
-    POS         = 0
-    SCALE       = 1
-    ROT_X       = 2
-    ROT_Y       = 3
-    ROT_Z       = 4
-    ROT_XY      = 5
-    ROT_YZ      = 6
-    ROT_XZ      = 7
-    ROT         = 8
+from .ani import AniTrackType
 
 PoolEntityType = Literal['POS', 'SCALE', 'EULER']
 
@@ -40,8 +29,8 @@ class PoolParser:
     _kaaa = struct.Struct('hhhh')
 
     @classmethod
-    def extract_value(cls, start:int, pool:bytes, tt:TrackType):
-        TT = TrackType
+    def extract_value(cls, start:int, pool:bytes, tt:AniTrackType):
+        TT = AniTrackType
         ang_rad = cls._ang_rad
         kvec = cls._kvec
         ka, kaa, kaaa = cls._ka, cls._kaa, cls._kaaa
@@ -71,7 +60,7 @@ class PoolParser:
             case _:
                 assert_never(tt)
     @classmethod
-    def parse(cls, cursor:PoolCursor, pool:bytes, tt:TrackType):
+    def parse(cls, cursor:PoolCursor, pool:bytes, tt:AniTrackType):
         ret = cls.extract_value(cursor.pos, pool, tt)
         cursor.pos += ret.size
         return ret
