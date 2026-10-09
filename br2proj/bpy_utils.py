@@ -143,34 +143,3 @@ def add_normals(bpy_mesh:bpy.types.Mesh, normals):
 #    for li in poly.loop_indices:
 #        vind = bpy_mesh.loops[li].vertex_index
 #        uv_layer.data[li].uv = tuple(bfm_geom.vertices[vind].uv)
-
-
-'''
-#TODO Think about where to place tests of axis_conversion
-    axes = ['X','Y','Z', '-X','-Y','-Z']
-    for f_fwd in axes:
-        for f_up in axes:
-            for t_fwd in axes:
-                for t_up in axes:
-
-                    if f_fwd[-1]==f_up[-1] or t_fwd[-1]==t_up[-1]:
-                        err = None
-                        try:
-                            axis_conversion(f_fwd, f_up, t_fwd, t_up)
-                        except ValueError as e:
-                            err = str(e)
-
-                        if err!='Axis conflict detected':
-                             raise ValueError(f'Exception test failed')
-                        continue
-
-                    cor = bpy_extras.io_utils.axis_conversion(f_fwd, f_up, t_fwd, t_up)
-                    my = axis_conversion(f_fwd, f_up, t_fwd, t_up)
-
-                    my2 = axis_conversion(f_fwd, f_up, t_fwd, t_up, True)
-
-                    if my==my2: raise ValueError('Self checking error')
-                    if my2.determinant()!=-1: raise ValueError('Determinant error')
-
-                    if cor!=my: raise ValueError('Equality test failed')
-'''

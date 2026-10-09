@@ -9,6 +9,11 @@ if (Path(__file__).parent / 'sandbox_bpy.py').exists():
 else:
     sandbox_bpy = None
 
+if (Path(__file__).parent / 'tests' / '__init__.py').exists():
+    from . import tests
+else:
+    tests = None
+
 #TODO [частично сделано, но предупреждение остаётся]File-> new empty scene break hotkey addon
 
 def register():
@@ -16,11 +21,13 @@ def register():
     tex_ui_imp.register()
     smb_ui_imp.register()
     bfm_ui_imp.register()
+    if tests: tests.register()
     if sandbox_bpy: sandbox_bpy.register()
 
 
 def unregister():
     if sandbox_bpy: sandbox_bpy.unregister()
+    if tests: tests.unregister()
     smb_ui_imp.unregister()
     tex_ui_imp.unregister()
     ui_decors.unregister()
