@@ -32,8 +32,9 @@ from .smb_imp import (
 from . import tex_imp
 from . import bpy_utils
 from .tex_imp import null_tex_provider
+from .bfm_imp_grouper import * #bfm_imp_grouper is part of bfm_imp, so we can allow a star import
 
-#TODO подумать над префиксной группировкой. Дело в том, что мэши большинства моделей названы единообразны - начинаются на префикс part_ или acc_
+#TODO [СДЕЛАНО] подумать над префиксной группировкой. Дело в том, что мэши большинства моделей названы единообразны - начинаются на префикс part_ или acc_
 #Поэтому стоит рассмотреть введение группировки по известным прификсам: part_, acc_, rayne_ и т.д.
 #acc - accessories
 #TODO [СДЕЛАНО] исправить симметрию, ошибки который подтверждаются https://web.archive.org/web/20090411063619/http://www.bloodrayne2.ru/ru/bloodrayne2/gallery/3d-models.html
@@ -51,93 +52,139 @@ class skb_provider:
         skb = sern_read.reader.read_all(path, SKB_File, self.load_anims, eof=self.load_anims)
         return (skb, path) if ret_path else skb
 
-class LinkKinds(enum.Enum):
-    AsIs = 0
-    Collection = 1
-    Empty = 2
-    @classmethod
-    def bool_to_collection(cls, collection:bool):
-        return cls.Collection if collection else cls.AsIs
-    def apply(self, on_asis, on_collection, on_empty):
-        call = lambda func: func() if func is not None else None
-        match self:
-            case LinkKinds.AsIs: return call(on_asis)            
-            case LinkKinds.Collection: return call(on_collection)
-            case LinkKinds.Empty: return call(on_empty)
-            case _: raise ValueError(f'Unkown link, link was:{self.name}')
+@dataclass
+class bfm_collection_tree:
+    name: str
+    color: BPY_COLELCTION_COLOR_TAG
+    allow_collapse:bool
+
+    collections: list['bfm_collection_tree'] = field(default_factory=list)
+    objects: list[bpy.types.Object] = field(default_factory=list)
+
+    def find_or_create_child(self, name: str, color: BPY_COLELCTION_COLOR_TAG, allow_collapse: bool):
+        for child in self.collections:
+            if child.name == name:
+                return child    
+        child = bfm_collection_tree(name, color, allow_collapse)
+        self.collections.append(child)
+        return child
+    
+    def to_flat(self):
+        ret: list[tuple[tuple[str, ...], bfm_collection_tree]] = []
+        def traverse(node, path):
+            path = path + (node.name,)
+            ret.append((path, node))
+            for child in node.collections:
+                traverse(child, path)
+        traverse(self, ())
+        return ret
+    
+    @property
+    def is_empty(self): return not self.collections and not self.objects
+    @property
+    def is_single(self): return not self.collections and len(self.objects) == 1
+
+    def collapse(self):
+        # As is well known, Blender's Outliner enforces collections to always appear above objects. 
+        # Therefore, collapsing is only executed when it is guaranteed to flatten the collection,
+        # which allows the order to be managed
+        for child in self.collections:
+            child.collapse()
+ 
+        self.collections = [child for child in self.collections if not child.is_empty]
+        single_obj_cols = [child for child in self.collections if child.allow_collapse and child.is_single]
+
+        if len(self.collections) == len(single_obj_cols):
+            for node in single_obj_cols:
+                self.objects.extend(node.objects)
+            self.collections.clear()
+
+    def resolve_collisions(self):
+        paths = {id(n): (n, p) for p, n in self.to_flat()}
+        state = {nid: (1, p[-1:]) for nid, (_, p) in paths.items()}
+
+        def find_collisions():
+            colls:dict[str, list[int]] = {}
+            for nid, (_, name_parts) in state.items():
+                name = '_'.join(name_parts)
+                colls.setdefault(name, []).append(nid)
+            return colls
+
+        def solve_collisions(colls:dict[str, list[int]]):
+            any_solved = False
+            for nids in colls.values():
+                if len(nids)<=1: continue
+                for nid in nids:
+                    _, path = paths[nid]
+                    depth, _ = state[nid]
+                    if depth < len(path):
+                        state[nid] = (depth+1, path[-(depth+1):])
+                        any_solved = True
+            return any_solved
+
+        colls = {}
+        while True:
+            colls = find_collisions()
+            if not solve_collisions(colls): break
+
+        for name, nids in colls.items():
+            for nid in nids:
+                paths[nid][0].name = name
+
+    def bpy_build(self, bpy_parent_col: bpy.types.Collection, allow_root:bool = True):
+        if allow_root:
+            bpy_col = bpy.data.collections.new(self.name)
+            bpy_utils.link_to_collection(bpy_col, bpy_parent_col)
+            if self.color != 'NONE':
+                bpy_col.color_tag = self.color
+        else:
+            bpy_col = bpy_parent_col
+
+        for bpy_obj in sorted(self.objects, key=lambda obj: obj.name):
+            bpy_utils.link_to_collection(bpy_obj, bpy_col)
+
+        for node in sorted(self.collections, key=lambda node: node.name):
+            node.bpy_build(bpy_col)
+        return bpy_col
+
+    def print_tree(self, gr_indent: str = '', indent: str = ''):
+        color = f' [{self.color}]' if self.color != 'NONE' else ''
+        collaps = ' [+]' if self.allow_collapse else ''
+        print(f'{gr_indent}📁 {self.name}{color}{collaps}')
+        items = self.collections + self.objects
+        for i, item in enumerate(items):
+            gr_inc, it_inc = ('└── ', '    ') if i == len(items) - 1 else ('├── ', '│   ')
+            if isinstance(item, bfm_collection_tree):
+                item.print_tree(indent + gr_inc, indent + it_inc)
+            else:
+                print(f'{indent + gr_inc}🔹 {item.name}')  
 
 @dataclass
 class bfm_linker:
-    link_kind:LinkKinds = LinkKinds.Collection
-    grouping: bool = False
-    transform: Matrix = field(default_factory=Matrix)
+    allow_model_collection: bool = False
+    grouper: bfm_grouper = field(default_factory=bfm_null_grouper)
     base_collection:bpy.types.Collection = field(default_factory= lambda: bpy_utils.get_active_collection())
+    transform: Matrix = field(default_factory=Matrix)
+    _col_tree: bfm_collection_tree = field(init=False)
 
-    _collection:bpy.types.Collection = field(init=False)
-    _empty:bpy.types.Object = field(init=False)
-    _groups:dict[str, bpy.types.Collection] = field(init=False, default_factory=dict)
-    _top_name:str = None
-
-    def _base_link(self, bpy_obj:bpy.types.Object | bpy.types.Collection, coll=None):
-        if coll is None: coll = self.base_collection
-        if isinstance(bpy_obj, bpy.types.Object):
-            coll.objects.link(bpy_obj)
-        elif isinstance(bpy_obj, bpy.types.Collection):
-            coll.children.link(bpy_obj)
-        else:
-            raise TypeError(f'Unkown type, type was {type(bpy_obj).__name__}')
-
-    def new_container(self, name: str): #, all_names:Iterable[str]
-        self._groups = dict()
-        #if self.grouping: 
-        #    self._groups = dict([(pref,bpy.data.collections.new(pref)) for nm in all_names if (pref:=self.get_prefix(nm))])
-        def on_collection():
-            self._collection = bpy.data.collections.new(name)
-            self._top_name = self._collection.name
-            self._base_link(self._collection)
-        def on_empty():
-            self._empty = bpy.data.objects.new(name, None)
-            self._empty.matrix_world = self.transform 
-            self._top_name = self._empty.name
-            self._base_link(self._empty)
-        self.link_kind.apply(None, on_collection, on_empty)
-    
+    def new_container(self, name: str):
+        self._col_tree = bfm_collection_tree(name, 'NONE', False)
 
     def end_container(self):
-        return self.link_kind.apply(lambda: self.base_collection, lambda: self._collection, lambda: self._empty)
+        self._col_tree.collapse()
+        self._col_tree.resolve_collisions()
+        return self._col_tree.bpy_build(self.base_collection, self.allow_model_collection)
 
-    def _get_group_name(self, name:str):
-        parts = name.split('_')
-        for i, part in enumerate(parts):
-            if len(part) == 1 and i >= 2:
-                if parts[1][0] in ['L','R', 'l','r']: 
-                    parts[1] = parts[1][1:]
-                return parts[0]+'_'+parts[1], 1
-        return (parts[0], 0) if len(parts) > 1 and parts[1] and parts[0]!='zzz' else None
+    def link_root(self, bpy_obj:bpy.types.Object):
+        bpy_obj.matrix_world = self.transform
+        self._col_tree.objects.append(bpy_obj)
 
-    def link(self, bpy_obj:bpy.types.Object, allow_group:bool = True):
-        coll = self.base_collection
-        if self.link_kind==LinkKinds.Collection: coll = self._collection
-
-        if self.grouping and allow_group: #self._top_name+'_'+
-            if gr := self._get_group_name(bpy_obj.name):
-                gr_name, gr_kind = gr
-                if (group := self._groups.get(gr_name)) is None:
-                    self._groups[gr_name] = group = bpy.data.collections.new(gr_name)
-                    if gr_kind==1: group.color_tag= 'COLOR_04'
-                    self._base_link(group, coll)
-                coll = group
-
-
-        self._base_link(bpy_obj, coll)
-        #bpy_utils.origin_to_geometry(bpy_obj)
-
-        def on_asis(): bpy_obj.matrix_world = self.transform
-        def on_collection(): bpy_obj.matrix_world = self.transform
-        def on_empty(): bpy_obj.parent = self._empty
-
-        self.link_kind.apply(on_asis, on_collection, on_empty)
-
+    def link_child(self, bpy_obj:bpy.types.Object, part_name:str):
+        root = self._col_tree
+        path = self.grouper.get_group_path(part_name)
+        for node in path:
+            root = root.find_or_create_child(node.name, node.color, node.allow_collapse)
+        root.objects.append(bpy_obj) 
 
 
 _BoneDict = dict[int, dict[float, list[int]]]
@@ -235,7 +282,7 @@ class bfm_builder:
         if MeshFlags.NORMALS in flags:
             bpy_utils.add_normals(bpy_mesh, [v.normal for v in geom.vertices])
         if MeshFlags.UVs in flags:
-            bpy_utils.add_uv_coords(bpy_mesh, [v.uv for v in geom.vertices])
+            bpy_utils.add_uv_coords(bpy_mesh, [Vector(v.uv) for v in geom.vertices])
 
         bpy_mesh.update()
         bpy_mesh.shade_smooth()
@@ -244,10 +291,10 @@ class bfm_builder:
     @staticmethod
     def apply_armature(bpy_obj:bpy.types.Object, bone_dict:_BoneDict, arm:_Armature):
         bpy_arm_mod = bpy_obj.modifiers.new(name='Armature', type='ARMATURE')
-        bpy_arm_mod.object = arm.arm_obj
-        #TODO set parent for arm_obj
-        #bpy_obj.parent = arm.arm_obj 
-        #bpy_obj.matrix_local = Matrix() 
+        bpy_arm_mod.object = arm.arm_obj # type: ignore
+        #TODO[done] set parent for arm_obj
+        bpy_obj.parent = arm.arm_obj 
+        bpy_obj.matrix_local = Matrix() 
         for bone_ind, wi_dict in bone_dict.items():
             bpy_vg = bpy_obj.vertex_groups.new(name=arm.bone_name(bone_ind))
             for wight, inds in wi_dict.items():
@@ -272,18 +319,17 @@ class bfm_importer:
     def load(self, bfm: tuple[BFM_File, str] | BFM_File | Path | str):
         bfm, top_name =  smb_builder._generic_load(BFM_File, bfm)
         #jexplore.jprint(bfm, path=f'{top_name}.json')
-        skb = self.skb_prov.provide(str(bfm.header.skb_name))
+        skb:SKB_File = self.skb_prov.provide(str(bfm.header.skb_name)) #type: ignore
         self.linker.new_container(top_name) #, (str(part.name) for part in bfm.parts)
 
-        arm = bfm_builder.build_armature('arm'+top_name, bfm.bones, skb.bones)
-        self.linker.link(bpy_utils.unlink_from_all(arm.arm_obj), allow_group=False)
+        arm = bfm_builder.build_armature(top_name, bfm.bones, skb.bones)
+        self.linker.link_root(bpy_utils.unlink_from_all(arm.arm_obj))
 
         bpy_mats = self.build_bpy_mats(bfm.text_packs)
 
         for i in range(bfm.header.numParts):
             desc = bfm.mesh_descs[i]
             part_name = str(bfm.parts[desc.n1_data[0]].name)
-            #print(part_name)
             geom = bfm.geometry[i]
             bpy_mesh, bone_dict = bfm_builder.build_mesh(part_name, geom, self.mesh_flags, arm)
             bpy_obj = bpy.data.objects.new(part_name, bpy_mesh)
@@ -294,7 +340,7 @@ class bfm_importer:
                 if tp_ind==-842150451 or tp_ind==261674992: tp_ind=0 #adzii.bfm case (gog and 2020)
                 bpy_obj.data.materials.append(bpy_mats[tp_ind])
             
-            self.linker.link(bpy_obj)
+            self.linker.link_child(bpy_obj, part_name)
         bpy.context.view_layer.update()
 
         return self.linker.end_container()
@@ -303,3 +349,6 @@ class bfm_importer:
 #ZGUEST_M.BFM, ZGUEST_F/M, UPANK, ZPUNK, ZPUNKF, LPUNK, FRANK_FEMALE, BOAR, GENERIC_F/M  - группировка по буквам?
 #FPUNK_FEMALE
 #ZPUNKF
+
+#These models are good for testing bfm_prefix_grouper
+#FPUNK_FEMALE RAYNE_DRESS ZPUNKF FERRIL GENERIC_M STREETS_RADIO_TOWER

@@ -2,7 +2,7 @@ import enum
 from pathlib import Path
 from dataclasses import dataclass, field
 from collections.abc import Iterable
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 from functools import cache
 
 import numpy as np
@@ -98,10 +98,11 @@ def _optimize_smb_action(action:bpy.types.Action, matr:Matrix, allow_output_matr
         action = None
     return action, out_matr
 
+_T = TypeVar('_T')
 
 class smb_builder:
     @staticmethod
-    def _generic_load(typ:type, file: tuple[Any, str] | Any | Path | str):
+    def _generic_load(typ:type[_T], file: tuple[_T, str] | _T | Path | str) -> tuple[_T, str]:
         src_type = type(file)
         if isinstance(file, tuple):
             file, name = file
@@ -298,13 +299,7 @@ class smb_linker:
 
 
     def _base_link(self, bpy_obj:bpy.types.Object | bpy.types.Collection):
-        if isinstance(bpy_obj, bpy.types.Object):
-            self._collection.objects.link(bpy_obj)
-        elif isinstance(bpy_obj, bpy.types.Collection):
-            self._collection.children.link(bpy_obj)
-        else:
-            raise TypeError(f'Unkown type, type was {type(bpy_obj).__name__}')
-
+        bpy_utils.link_to_collection(bpy_obj, self._collection)
 
     def link(self, bpy_obj:bpy.types.Object):
         self._base_link(bpy_obj)
@@ -318,7 +313,7 @@ class smb_linker:
     def new_container(self, name: str):
         if self.collection is None:
             self._collection = bpy.data.collections.new(name)
-            bpy_utils.get_active_collection().children.link(self._collection)
+            bpy_utils.link_to_collection(self._collection, bpy_utils.get_active_collection())
         else:
             self._collection = self.collection
 

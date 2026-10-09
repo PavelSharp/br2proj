@@ -122,6 +122,13 @@ def unlink_from_all(bpy_obj:bpy.types.Object):
         coll.objects.unlink(bpy_obj)
     return bpy_obj
 
+def link_to_collection(bpy_obj:bpy.types.Object | bpy.types.Collection, collection:bpy.types.Collection):
+    if isinstance(bpy_obj, bpy.types.Object):
+        collection.objects.link(bpy_obj)
+    elif isinstance(bpy_obj, bpy.types.Collection):
+        collection.children.link(bpy_obj)
+    else:
+        raise TypeError(f'Unknown type, type was {type(bpy_obj).__name__}')
 
 def add_uv_coords(bpy_mesh:bpy.types.Mesh, uvs:Sequence[Vector]):
     uv_layer = bpy_mesh.uv_layers.new()

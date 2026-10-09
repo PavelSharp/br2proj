@@ -47,7 +47,7 @@ class ImportBFM(Operator, ImportHelper):
 
     use_collection:BoolProperty(
             name='Use Collection',
-            description='Put object into a collection. Otherwise, the current collection will be used.',
+            description='Put object into a new collection. Otherwise, the current collection will be used.',
             default=True,
     )
 
@@ -111,10 +111,10 @@ class ImportBFM(Operator, ImportHelper):
         if not (skb:=self.get_skb_provider()): return {'CANCELLED'}
 
         linker = bfm_imp.bfm_linker(
-                        bfm_imp.LinkKinds.bool_to_collection(self.use_collection),
-                        grouping=self.use_groups, 
+                        allow_model_collection = self.use_collection,
+                        grouper=bfm_imp.bfm_prefix_grouper() if self.use_groups else bfm_imp.bfm_null_grouper(),
+                        base_collection=bpy_utils.get_collection(not self.use_collection),
                         transform=self.get_transform_matrix(),
-                        base_collection=bpy_utils.get_collection(not self.use_collection)
         )
 
         bfm = bfm_imp.bfm_importer(

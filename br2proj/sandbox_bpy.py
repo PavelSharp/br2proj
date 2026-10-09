@@ -213,7 +213,7 @@ def _work(self:Operator):
     ani_path = base_path / 'ANIMATIONS' / Path(anis[ch][0][0]).stem / anis[ch][1][ai]
 
     skb_prov = bfm_imp.skb_provider(base_path / 'DATA', load_anims=True)
-    linker = bfm_imp.bfm_linker(bfm_imp.LinkKinds.Collection, transform=matr)
+    linker = bfm_imp.bfm_linker(True, bfm_imp.bfm_prefix_grouper(), transform=matr)
     loader = bfm_imp.bfm_importer(linker=linker, create_materials = DO_TEXTURES, skb_prov=skb_prov, tex_prov= tex_prov if DO_TEXTURES else null_tex_prov)
 
     bfm:BFM_File = sern_read.reader.read_all(bfm_path, BFM_File)
