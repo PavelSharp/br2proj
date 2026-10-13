@@ -1,3 +1,4 @@
+from typing import Literal, NamedTuple, assert_never
 import bpy
 import bpy.types
 from bpy_extras import io_utils
@@ -50,47 +51,6 @@ def origin_to_geometry(obj:bpy.types.Object):
     #obj.matrix_world = world_matrix
     pass
 
-#Keep in mind that when we change_orient, the scale becomes negative. In blenderui, some scale values will be negative.
-def axis_conversion(from_forward='Y', from_up='Z', to_forward='Y', to_up='Z', change_orient = False) -> Matrix:
-    def parse(val): 
-        axes = {'X':0, 'Y':1, 'Z':2}
-        def throw(): raise ValueError(f'Unkown Axis {val}')
-        if not (1<=len(val)<=2) or val[-1] not in axes: throw()
-        sig=1 
-        if len(val)==2:
-            if val[0]!='-': throw()
-            sig = -1
-        return sig, axes[val[-1]]
-
-    def find_basis(fwd, up): #Tuple[bool, int]
-        mul_dict = {
-            (0,1):(+1,2),  (1,2):(+1,0),  (2,0):(+1,1),
-            (1,0):(-1,2),  (2,1):(-1,0),  (0,2):(-1,1),
-        }
-        sig1, i1 = fwd
-        sig2, i2 = up  
-        sig, res  = mul_dict[(i1,i2)]
-        return sig1*sig2*sig, res
-    
-    ret = Matrix(((0,0,0), (0,0,0), (0,0,0)))
-    def add(v1, v2):
-        sig1, i1 = parse(v1)
-        sig2, i2 = parse(v2)
-        ret[i2][i1]=sig1*sig2
-        return (sig1, i1), (sig2, i2)
-
-    from_forward, to_forward = add(from_forward,to_forward)
-    from_up, to_up = add(from_up,to_up)
-    
-    if from_forward[1] == from_up[1] or to_forward[1] == to_up[1]:
-        raise ValueError('Axis conflict detected')
-
-    sig1, i1 = find_basis(from_forward, from_up)
-    sig2, i2 = find_basis(to_forward, to_up)
-    ret[i2][i1] = (-1 if change_orient else 1)*sig1*sig2
-    return ret
-        
-    
 
 @contextmanager
 def restored_playhead(target_frame: int | float | None = None):
@@ -138,6 +98,127 @@ def add_uv_coords(bpy_mesh:bpy.types.Mesh, uvs:Sequence[Vector]):
 def add_normals(bpy_mesh:bpy.types.Mesh, normals):
     return bpy_mesh.normals_split_custom_set_from_vertices(normals)
 
+class UnitAxis(NamedTuple):
+    sig:Literal[-1, 1]
+    xyz:Literal[0,1,2]
+
+    @staticmethod
+    def _extract_axis(text:str) -> tuple['UnitAxis', str]:
+        beg = lambda s: (text[len(s):], ()) if text.startswith(s) else None
+        if s:=beg('+X') or beg('X'): return  UnitAxis(1,0),  s[0]
+        if s:=beg('+Y') or beg('Y'): return  UnitAxis(1,1),  s[0]
+        if s:=beg('+Z') or beg('Z'): return  UnitAxis(1,2),  s[0]
+        if s:=beg('-X'): return UnitAxis(-1,0), s[0]
+        if s:=beg('-Y'): return UnitAxis(-1,1), s[0]
+        if s:=beg('-Z'): return UnitAxis(-1,2), s[0]
+        raise ValueError(f'Unable to extract axis: {text}') 
+
+    @classmethod
+    def from_str(cls, text:str):
+        axis, s = cls._extract_axis(text)
+        if s: raise ValueError(f'Unparsable axis: {text}') 
+        return axis
+    
+    def __str__(self):
+        match self.xyz:
+            case 0: name = 'X'
+            case 1: name = 'Y'
+            case 2: name = 'Z'
+            case _: assert_never(self.xyz)
+        return name if self.sig == 1 else f'-{name}'
+
+    def to_vec(self): 
+        match self.xyz:
+            case 0: return Vector((self.sig,0,0))
+            case 1: return Vector((0,self.sig,0))
+            case 2: return Vector((0,0,self.sig))
+            case _:assert_never(self.xyz)
+
+class OrthoBasis(NamedTuple):
+    forward:UnitAxis
+    up:UnitAxis
+    hand:Literal['lh', 'rh']
+
+    @classmethod
+    def from_str(cls, text:str):
+        s = text
+        fwd, s = UnitAxis._extract_axis(s)
+        up, s = UnitAxis._extract_axis(s)
+        s = s[1:] if s and s[0]=='_' else s
+        hand:Literal['lh', 'rh']
+        match s:
+            case 'lh': hand = 'lh'
+            case 'rh': hand = 'rh'
+            case _: raise ValueError(f'Unparsable basis: {text}')  
+        return OrthoBasis(fwd, up, hand)
+
+    def __str__(self) -> str:
+        return f'{self.forward}{self.up}_{self.hand}'
+
+    def validate(self):
+        if self.forward.xyz==self.up.xyz:
+            raise ValueError(f'Collinear axes conflict detected in basis: {self}')
+
+    def to_matrix(self):
+        self.validate()
+        fwd, up  = self.forward.to_vec(), self.up.to_vec()
+        right=Vector()
+        match self.hand:
+            case 'lh': right = fwd.cross(up)
+            case 'rh': right = up.cross(fwd)
+            case _: assert_never(self.hand)
+        return Matrix((right, up, fwd)).transposed() #type: ignore
+    
+    @classmethod
+    def basis_conversion(cls, from_space:'OrthoBasis', to_space:'OrthoBasis'):
+        return to_space.to_matrix() @ from_space.to_matrix().transposed()
+
+#TODO Should be removed. Left for backward compatibility.
+def axis_conversion(from_forward='Y', from_up='Z', to_forward='Y', to_up='Z', change_orient = False):
+    from_str = f'{from_forward}{from_up}rh'
+    to_str = f'{to_forward}{to_up}{"lh" if change_orient else "rh"}'
+    return OrthoBasis.basis_conversion(OrthoBasis.from_str(from_str), OrthoBasis.from_str(to_str))
+
+#[13.10.2026] This snippet became a comment. Left as a memory
+#Keep in mind that when we change_orient, the scale becomes negative. In blenderui, some scale values will be negative.
+# def axis_conversion(from_forward='Y', from_up='Z', to_forward='Y', to_up='Z', change_orient = False) -> Matrix:
+#     def parse(val): 
+#         axes = {'X':0, 'Y':1, 'Z':2}
+#         def throw(): raise ValueError(f'Unkown Axis {val}')
+#         if not (1<=len(val)<=2) or val[-1] not in axes: throw()
+#         sig=1 
+#         if len(val)==2:
+#             if val[0]!='-': throw()
+#             sig = -1
+#         return sig, axes[val[-1]]
+
+#     def find_basis(fwd, up): #Tuple[bool, int]
+#         mul_dict = {
+#             (0,1):(+1,2),  (1,2):(+1,0),  (2,0):(+1,1),
+#             (1,0):(-1,2),  (2,1):(-1,0),  (0,2):(-1,1),
+#         }
+#         sig1, i1 = fwd
+#         sig2, i2 = up  
+#         sig, res  = mul_dict[(i1,i2)]
+#         return sig1*sig2*sig, res
+    
+#     ret = Matrix(((0,0,0), (0,0,0), (0,0,0)))
+#     def add(v1, v2):
+#         sig1, i1 = parse(v1)
+#         sig2, i2 = parse(v2)
+#         ret[i2][i1]=sig1*sig2
+#         return (sig1, i1), (sig2, i2)
+
+#     from_forward, to_forward = add(from_forward,to_forward)
+#     from_up, to_up = add(from_up,to_up)
+    
+#     if from_forward[1] == from_up[1] or to_forward[1] == to_up[1]:
+#         raise ValueError('Axis conflict detected')
+
+#     sig1, i1 = find_basis(from_forward, from_up)
+#     sig2, i2 = find_basis(to_forward, to_up)
+#     ret[i2][i1] = (-1 if change_orient else 1)*sig1*sig2
+#     return ret
 #uv_layer = bpy_mesh.uv_layers.new()
 #for poly in bpy_mesh.polygons:
 #    for li in poly.loop_indices:
