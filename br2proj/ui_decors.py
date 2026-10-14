@@ -11,10 +11,11 @@ from bpy.props import (
     BoolProperty,
     FloatProperty,
     StringProperty,
+    EnumProperty,
 )
 
 from . import tex_imp
-from .bpy_utils import axis_conversion
+from .bpy_utils import axis_conversion, SpaceTransformer, SpacePresets, OrthoBasis, UnitAxis, AppSpace
 
 
 def button_operator(*, doc_str:str, bl_idname: str, bl_label: str):
@@ -44,7 +45,7 @@ def button_operator(*, doc_str:str, bl_idname: str, bl_label: str):
     }
     return type(bl_idname+"Class", (Operator,), attrs)
 
-
+#TODO Obsoleted, should be removed. [Currently using by smb_ui_imp]
 def transform_helper(cls=None, /, **kwargs):
     if cls is None: return lambda cls: transform_helper(cls, **kwargs)
     
@@ -130,6 +131,66 @@ Note: Switching coordinate systems may result in negative scale values in world 
     cls.get_transform_matrix = get_transform_matrix
     return cls
 
+
+def space_transform_helper(cls=None, /, *, space:AppSpace, show_bone_axis:bool):
+    if cls is None: return lambda cls: space_transform_helper(cls, space=space, show_bone_axis=show_bone_axis)
+
+    cls = orientation_helper(axis_forward=str(space.basis.forward), axis_up=str(space.basis.up))(cls)
+    anno = cls.__annotations__
+
+    axis_items = [
+        ('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', ''),
+        ('-X', '-X', ''), ('-Y', '-Y', ''), ('-Z', '-Z', ''),
+    ]
+
+    anno['use_manual_orientation'] = BoolProperty(
+        name='Manual Orientation',
+        description='Manually set space orientation, otherwise import raw data as is',
+        default=True,
+    )
+
+    if show_bone_axis:
+        anno['bone_axis'] = EnumProperty(
+            name='Bone Axis',
+            description='The primary axis along which bones grow in the source format',
+            items=axis_items,
+            default=str(space.bone_axis),
+        )
+
+    anno['basis'] = EnumProperty(
+        name='Basis',
+        description='Choose between left-handed and right-handed basis',
+        items=[
+            ('lh', 'Left-Handed', ''),
+            ('rh', 'Right-Handed', ''),
+        ],
+        default=space.basis.hand,
+    )
+
+    def draw_space_transformer_panel(self, context, layout: UILayout, id: str):
+        header, body = layout.panel(id)
+        header.use_property_split = False
+        header.prop(self, 'use_manual_orientation')
+        if body:
+            body.use_property_split = True
+            body.enabled = self.use_manual_orientation
+            body.prop(self, 'axis_forward')
+            body.prop(self, 'axis_up')
+            body.prop(self, 'basis')
+            if show_bone_axis:
+                body.prop(self, 'bone_axis')
+
+    def get_space_transformer(self):
+        trf = SpacePresets.DEFAULT
+        if self.use_manual_orientation:
+            bone_axis = self.bone_axis if show_bone_axis else space.bone_axis
+            user_space = AppSpace(f'{self.axis_forward}{self.axis_up}_{self.basis}', bone_axis)
+            trf = SpaceTransformer.create_app(user_space, SpacePresets.BPY_SPACE)
+        return trf
+
+    cls.draw_space_transformer_panel = draw_space_transformer_panel
+    cls.get_space_transformer = get_space_transformer
+    return cls
 
 
 #TODO[Вороятно, исправлено] Применения этого оператора может быть отменено через ctrl-z

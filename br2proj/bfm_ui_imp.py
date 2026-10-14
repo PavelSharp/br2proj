@@ -24,7 +24,7 @@ from . import bpy_utils
 from . import ui_decors
 from . import bfm_imp
 
-@ui_decors.transform_helper(axis_forward='Z', axis_up='Y')
+@ui_decors.space_transform_helper(space=bpy_utils.SpacePresets.TRI_SPACE, show_bone_axis=True)
 @ui_decors.texture_helper
 @ui_decors.folder_picker(access_name='skb_path', ui_name='SKB Folder', description=
     """Any BFM file link to the SKB skeleton file.
@@ -91,7 +91,7 @@ class ImportBFM(Operator, ImportHelper):
             body.label(text='SKB Folder:', icon='OUTLINER_OB_ARMATURE')
             self.draw_folder_picker("skb_path", context, body)
         self.draw_texture_panel(context, layout, "BR2PROJ_import_textures")
-        self.draw_transform_panel(context, layout, "BR2PROJ_import_transform")
+        self.draw_space_transformer_panel(context, layout, "BR2PROJ_import_transform")
 
     def get_skb_provider(self):
         path = self.skb_path
@@ -114,11 +114,11 @@ class ImportBFM(Operator, ImportHelper):
                         allow_model_collection = self.use_collection,
                         grouper=bfm_imp.bfm_prefix_grouper() if self.use_groups else bfm_imp.bfm_null_grouper(),
                         base_collection=bpy_utils.get_collection(not self.use_collection),
-                        transform=self.get_transform_matrix(),
         )
 
         bfm = bfm_imp.bfm_importer(
             skb_prov=skb,
+            trf=self.get_space_transformer(),
             linker=linker,
             create_materials=self.use_materials,
             tex_prov=tex,

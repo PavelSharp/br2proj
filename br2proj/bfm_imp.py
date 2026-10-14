@@ -31,6 +31,7 @@ from .smb_imp import (
 )
 from . import tex_imp
 from . import bpy_utils
+from .bpy_utils import SpaceTransformer
 from .tex_imp import null_tex_provider
 from .bfm_imp_grouper import * #bfm_imp_grouper is part of bfm_imp, so we can allow a star import
 
@@ -198,7 +199,6 @@ class _Armature:
 
 
 class bfm_builder:
-    bone_orient = Quaternion((1.0, 0.0, 0.0), math.pi / 2.0) #Required by Blender, since a bone can grow only along the Y axis
     @staticmethod
     def build_material(pack:BFM_TexPack, tex_prov:null_tex_provider, name: str | None = None) -> bpy.types.Material: 
         return smb_builder.build_material(pack, tex_prov, name)
@@ -208,7 +208,7 @@ class bfm_builder:
         return smb_builder.load_textures_only(pack, tex_prov)
 
     @staticmethod
-    def build_armature(name:str, bfm_bones:BFM_Bones, skb_bones:list[SKB_Bone]) -> _Armature:
+    def build_armature(name:str, trf:SpaceTransformer, bfm_bones:BFM_Bones, skb_bones:list[SKB_Bone]) -> _Armature:
         #TODO сравнить количесвто костей
         arm = bpy.data.armatures.new("Armature")    
         ret_arm = _Armature(bpy.data.objects.new(name, arm))    
@@ -235,9 +235,9 @@ class bfm_builder:
                 parent_head = Vector((0,0,0))
 
             rot_mat = Matrix(skb_bone.matrix.rows)
-            rot_mat = rot_mat @ bfm_builder.bone_orient.to_matrix()
+            rot_mat = trf.conv_rest_bone_matrix(rot_mat)
 
-            pos = Vector(bfm_bones.pos[i])
+            pos = trf.conv_vec(Vector(bfm_bones.pos[i]))
             #qw = [Vector(bfm_bones.unkown[i].a), Vector(bfm_bones.unkown[i].b)]
             #bpy_utils.create_bound_box(bfm_bones.unkown[i], matryyyyyMatrix.Translation(bpy_bone.head) @ qw)
             bpy_bone.length = BONE_LENGTH
@@ -252,20 +252,20 @@ class bfm_builder:
         #Create a fake bone for Root Motion to keep the Armature Object's transform unoccupied, allowing free manual positioning.
         root_bone = arm.edit_bones.new('root_bone')
         root_bone.length = BONE_LENGTH
-        root_bone.matrix = bfm_builder.bone_orient.to_matrix().to_4x4()
+        root_bone.matrix = trf.get_rootbone_matrix().to_4x4()
         for bone in parents: bone.parent = root_bone
 
         bpy.ops.object.mode_set(mode='OBJECT')
         return ret_arm
 
     @staticmethod  
-    def build_mesh(name:str, geom:BFM_MeshGeometry, flags:MeshFlags, arm: _Armature) -> tuple[bpy.types.Mesh, _BoneDict]:
+    def build_mesh(name:str, trf:SpaceTransformer, geom:BFM_MeshGeometry, flags:MeshFlags, arm: _Armature) -> tuple[bpy.types.Mesh, _BoneDict]:
         vertices = []
         bone_dict = {}
         for vi, bfm_vert in enumerate(geom.vertices):
             bpy_pos = Vector((0,0,0))
             for n in range(bfm_vert.numWeights):
-                pos = Vector(bfm_vert.weight_pos[n])
+                pos = trf.conv_vec(Vector(bfm_vert.weight_pos[n]))
                 bias = bfm_vert.biases[n]
                 bone_ind = bfm_vert.bone_indices[n]
                 bone = arm.arm_obj.data.bones.get(arm.bone_name(bone_ind))
@@ -277,10 +277,10 @@ class bfm_builder:
             vertices.append(bpy_pos)
 
         bpy_mesh = bpy.data.meshes.new(name)
-        bpy_mesh.from_pydata(vertices, [], geom.triangles) #TODO it's normal?  [(a,b,c) for a,b,c in geom.triangles]
+        bpy_mesh.from_pydata(vertices, [], trf.flip_triangles(geom.triangles)) #TODO it's normal?  [(a,b,c) for a,b,c in geom.triangles]
 
         if MeshFlags.NORMALS in flags:
-            bpy_utils.add_normals(bpy_mesh, [v.normal for v in geom.vertices])
+            bpy_utils.add_normals(bpy_mesh, [trf.conv_vec(Vector(v.normal)) for v in geom.vertices])
         if MeshFlags.UVs in flags:
             bpy_utils.add_uv_coords(bpy_mesh, [Vector(v.uv) for v in geom.vertices])
 
@@ -304,6 +304,7 @@ class bfm_builder:
 @dataclass
 class bfm_importer:
     skb_prov: skb_provider
+    trf:SpaceTransformer = bpy_utils.SpacePresets.TRI2BPY
     linker: bfm_linker = field(default_factory=bfm_linker)
     create_materials:bool = False
     tex_prov: null_tex_provider = field(default_factory=null_tex_provider)
@@ -322,7 +323,7 @@ class bfm_importer:
         skb:SKB_File = self.skb_prov.provide(str(bfm.header.skb_name)) #type: ignore
         self.linker.new_container(top_name) #, (str(part.name) for part in bfm.parts)
 
-        arm = bfm_builder.build_armature(top_name, bfm.bones, skb.bones)
+        arm = bfm_builder.build_armature(top_name, self.trf, bfm.bones, skb.bones)
         self.linker.link_root(bpy_utils.unlink_from_all(arm.arm_obj))
 
         bpy_mats = self.build_bpy_mats(bfm.text_packs)
@@ -331,7 +332,7 @@ class bfm_importer:
             desc = bfm.mesh_descs[i]
             part_name = str(bfm.parts[desc.n1_data[0]].name)
             geom = bfm.geometry[i]
-            bpy_mesh, bone_dict = bfm_builder.build_mesh(part_name, geom, self.mesh_flags, arm)
+            bpy_mesh, bone_dict = bfm_builder.build_mesh(part_name, self.trf, geom, self.mesh_flags, arm)
             bpy_obj = bpy.data.objects.new(part_name, bpy_mesh)
 
             bfm_builder.apply_armature(bpy_obj, bone_dict, arm)

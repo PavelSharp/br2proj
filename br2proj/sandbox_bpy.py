@@ -212,9 +212,10 @@ def _work(self:Operator):
     bfm_path = base_path / 'MODELS' / anis[ch][0][bi]
     ani_path = base_path / 'ANIMATIONS' / Path(anis[ch][0][0]).stem / anis[ch][1][ai]
 
+    trf = bpy_utils.SpacePresets.TRI2BPY
     skb_prov = bfm_imp.skb_provider(base_path / 'DATA', load_anims=True)
-    linker = bfm_imp.bfm_linker(True, bfm_imp.bfm_prefix_grouper(), transform=matr)
-    loader = bfm_imp.bfm_importer(linker=linker, create_materials = DO_TEXTURES, skb_prov=skb_prov, tex_prov= tex_prov if DO_TEXTURES else null_tex_prov)
+    linker = bfm_imp.bfm_linker(True, bfm_imp.bfm_prefix_grouper())
+    loader = bfm_imp.bfm_importer(trf=trf, linker=linker, create_materials = DO_TEXTURES, skb_prov=skb_prov, tex_prov= tex_prov if DO_TEXTURES else null_tex_prov)
 
     bfm:BFM_File = sern_read.reader.read_all(bfm_path, BFM_File)
     skb, skb_path = skb_prov.provide(str(bfm.header.skb_name), True)
@@ -245,14 +246,13 @@ def _work(self:Operator):
             raise ValueError(f"Keyframe err, kf was {kf}")
 
     #[24.04.2025, IMPORTANT] See Nocturne/Editor/doc/Editor.pdf Coordinate System for more details about it
-    bone_orient = bfm_imp.bfm_builder.bone_orient.inverted()
 
     def add_pos(bpy_bone, kf, v:Vector):
-        bpy_bone.location = bone_orient @ v.zxy
+        bpy_bone.location = trf.conv_anim_pos(v.zxy)
         bpy_bone.keyframe_insert("location", frame=kf+1)
 
     def add_scale(bpy_bone, kf, v:Vector):
-        bpy_bone.scale = v
+        bpy_bone.scale = trf.conv_anim_scale(v)
         bpy_bone.keyframe_insert("scale", frame=kf+1)
 
     def add_quat(bpy_bone, kf, v:Vector):
@@ -261,7 +261,7 @@ def _work(self:Operator):
         # compact storage, which are then converted by the engine into quaternion
         # 'ZXY' Euler rotation order is proven by sub_720790
         quat = Euler((v.y,v.x,v.z), 'ZXY').to_quaternion()
-        bpy_bone.rotation_quaternion = bone_orient @ quat @ bone_orient.inverted()
+        bpy_bone.rotation_quaternion = trf.conv_anim_rot(quat)
         bpy_bone.keyframe_insert("rotation_quaternion", frame=kf+1)
     
     def add_ani_frame(bpy_bone, kf:int, type: ani_imp.PoolEntityType, v:Vector):

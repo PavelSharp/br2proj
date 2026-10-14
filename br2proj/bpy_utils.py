@@ -1,8 +1,9 @@
 from typing import Literal, NamedTuple, assert_never
+from dataclasses import dataclass
 import bpy
 import bpy.types
 from bpy_extras import io_utils
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Vector, Quaternion
 from collections.abc import Iterable
 from .sern.fixed_types import box3d
 from collections.abc import Sequence
@@ -98,6 +99,12 @@ def add_uv_coords(bpy_mesh:bpy.types.Mesh, uvs:Sequence[Vector]):
 def add_normals(bpy_mesh:bpy.types.Mesh, normals):
     return bpy_mesh.normals_split_custom_set_from_vertices(normals)
 
+
+
+#================================
+#	    SPACE TRANSFORMER
+#================================
+
 class UnitAxis(NamedTuple):
     sig:Literal[-1, 1]
     xyz:Literal[0,1,2]
@@ -173,7 +180,87 @@ class OrthoBasis(NamedTuple):
     def basis_conversion(cls, from_space:'OrthoBasis', to_space:'OrthoBasis'):
         return to_space.to_matrix() @ from_space.to_matrix().transposed()
 
-#TODO Should be removed. Left for backward compatibility.
+
+@dataclass(frozen=True, slots=True, init=False)
+class AppSpace:
+    basis:OrthoBasis
+    bone_axis:UnitAxis #Defines the bone growth axis, as software often supports only a fixed axis
+    def __new__(cls, basis:OrthoBasis|str, bone_axis:UnitAxis|str):
+        obj = object.__new__(cls)
+        object.__setattr__(obj, 'basis', OrthoBasis.from_str(basis) if isinstance(basis, str) else basis)
+        object.__setattr__(obj, 'bone_axis', UnitAxis.from_str(bone_axis) if isinstance(bone_axis, str) else bone_axis)
+        return obj
+    
+
+class SpaceTransformer(NamedTuple):
+    space:Matrix
+    bone_correction:Matrix
+
+    @staticmethod
+    def msize(m:Matrix): return (len(m.row), len(m.col))
+
+    @classmethod
+    def create(cls, space:Matrix|None = None, bone_aligment:Matrix|None = None):
+        def check(m:Matrix|None):
+            if m is None: return Matrix.Identity(3)
+            if cls.msize(m)!=(3,3): raise ValueError(f'Expected 3x3 matrix, matrix was: {m}')
+            if not m.is_orthogonal: raise ValueError(f'Expected an orthogonal matrix, matrix was: {m}')
+            return m
+        space=check(space)
+        bone_aligment=check(bone_aligment)
+        return cls(space, bone_aligment)
+
+    @classmethod
+    def create_app(cls, in_space:AppSpace, out_space: AppSpace):
+        space = OrthoBasis.basis_conversion(in_space.basis, out_space.basis)
+        in_bone_vec = in_space.bone_axis.to_vec()
+        out_bone_vec = out_space.bone_axis.to_vec()
+        bone_alignment = (space @ in_bone_vec).rotation_difference(out_bone_vec).to_matrix()
+        return cls.create(space, bone_alignment)
+
+    def inverted(self): 
+        inv_space = self.space.inverted()
+        inv_bone_corr = inv_space @ self.bone_correction.inverted() @ self.space
+        return self.create(inv_space, inv_bone_corr)
+
+    @classmethod
+    def up_mul(cls, m1:Matrix, m2:Matrix) -> Matrix:
+        up = lambda m, b: m.to_4x4() if b else m
+        m1sz, m2sz = cls.msize(m1), cls.msize(m2)
+        if (m1sz==(3,3) or m1sz==(4,4)) and (m2sz==(3,3) or m2sz==(4,4)):
+            return up(m1, m2sz==(4,4)) @ up(m2, m1sz==(4,4))
+        else:
+            raise ValueError(f'Unexpected matrix size: {m1sz} and {m2sz}. Expected 3x3 or 4x4')            
+
+    @classmethod
+    def change_basis(cls, basis:Matrix, dir:Literal['from', 'to'], m:Matrix):
+        match dir:
+            case 'from':return cls.up_mul(cls.up_mul(basis, m), basis.inverted())
+            case 'to': return cls.up_mul(cls.up_mul(basis.inverted(), m), basis)
+
+    def change_space(self, m:Matrix): return self.change_basis(self.space, 'from', m)
+    def apply_correction(self, m:Matrix): return self.change_basis(self.bone_correction, 'to', m)
+
+    def conv_vec(self, v: Vector): return self.space @ v
+    def conv_rest_bone_matrix(self, m: Matrix): return self.up_mul(self.change_space(m), self.bone_correction)
+    def get_rootbone_matrix(self): return self.bone_correction
+
+    def conv_anim_pos(self, v: Vector): return self.bone_correction.inverted() @ (self.space @ v) 
+    def conv_anim_rot(self, q: Quaternion): return self.apply_correction(self.change_space(q.to_matrix())).to_quaternion()
+    def conv_anim_scale(self, v: Vector): return self.apply_correction(self.change_space(Matrix.Diagonal(v))).to_scale()
+    #return self.change_basis(Matrix.Diagonal(v)).to_scale()
+    
+    @staticmethod
+    def flip_triangles(triangles:Iterable): return [(t[0], t[2], t[1]) for t in triangles]  
+
+class SpacePresets:
+    TRI_SPACE = AppSpace('ZY_lh', 'Z')
+    BPY_SPACE = AppSpace('YZ_rh', 'Y')
+    TRI2BPY = SpaceTransformer.create_app(TRI_SPACE, BPY_SPACE)
+    BPY2TRI = TRI2BPY.inverted()
+    DEFAULT = SpaceTransformer.create()
+
+#TODO Obsoleted, should be removed. Left for backward compatibility.
 def axis_conversion(from_forward='Y', from_up='Z', to_forward='Y', to_up='Z', change_orient = False):
     from_str = f'{from_forward}{from_up}rh'
     to_str = f'{to_forward}{to_up}{"lh" if change_orient else "rh"}'
@@ -219,6 +306,8 @@ def axis_conversion(from_forward='Y', from_up='Z', to_forward='Y', to_up='Z', ch
 #     sig2, i2 = find_basis(to_forward, to_up)
 #     ret[i2][i1] = (-1 if change_orient else 1)*sig1*sig2
 #     return ret
+
+
 #uv_layer = bpy_mesh.uv_layers.new()
 #for poly in bpy_mesh.polygons:
 #    for li in poly.loop_indices:
