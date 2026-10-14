@@ -208,7 +208,7 @@ def _work(self:Operator):
             ['WALK_N.ANI', 'RUN_N.ANI', 'ATTACK_COMBO.ANI', 'ANGRY_SMASH.ANI', 'FEED.ANI']
         ),
         ]
-    ch, bi, ai = 1,0,0
+    ch, bi, ai = 1,0,4
     bfm_path = base_path / 'MODELS' / anis[ch][0][bi]
     ani_path = base_path / 'ANIMATIONS' / Path(anis[ch][0][0]).stem / anis[ch][1][ai]
 
@@ -243,12 +243,6 @@ def _work(self:Operator):
     def check_kf(kf):
         if kf<0 or kf>=ani.header.numFrames:
             raise ValueError(f"Keyframe err, kf was {kf}")
-        
-    def sym(name:str):
-        for bone in skb.bones:
-           if ( bone.symBone!=-1 and str(bone.name)==name):
-               return str(skb.bones[bone.symBone].name)
-        return name
 
     #[24.04.2025, IMPORTANT] See Nocturne/Editor/doc/Editor.pdf Coordinate System for more details about it
     bone_orient = bfm_imp.bfm_builder.bone_orient.inverted()
@@ -265,7 +259,8 @@ def _work(self:Operator):
         bpy_bone.rotation_mode = 'QUATERNION'
         # In accordance with sub_7227A0, Euler angles are used only for
         # compact storage, which are then converted by the engine into quaternion
-        quat = Euler((-v.y,v.x,-v.z), 'ZXY').to_quaternion()
+        # 'ZXY' Euler rotation order is proven by sub_720790
+        quat = Euler((v.y,v.x,v.z), 'ZXY').to_quaternion()
         bpy_bone.rotation_quaternion = bone_orient @ quat @ bone_orient.inverted()
         bpy_bone.keyframe_insert("rotation_quaternion", frame=kf+1)
     
@@ -278,7 +273,7 @@ def _work(self:Operator):
 
     pool_bytes = bytes(ani.animPool)
     for ani_bone in ani.used_bones:
-        bpy_bone = arm.pose.bones[sym(str(ani_bone.name))]
+        bpy_bone = arm.pose.bones[str(ani_bone.name)]
         for k in range(ani_bone.numKeyFrames):
             pool_entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_bone.tt)
             add_ani_frame(bpy_bone, pool_entity.kf, pool_entity.type, pool_entity.vec)
