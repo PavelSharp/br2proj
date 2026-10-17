@@ -27,7 +27,7 @@ from . import smb
 from . import smb_imp
 import bpy.types
 
-base_path = Path('D:/Games/Bloodrayne 2_min')
+base_path = Path('D:/Games/Bloodrayne 2_min') #Path('D:/br2dec/!reverse_new')
 null_tex_prov = tex_imp.null_tex_provider()
 tex_prov = tex_imp.tex_provider(base_path / 'ART')
 matr = bpy_utils.axis_conversion('Z', 'Y', change_orient=True).to_4x4() # Matrix.Identity(4)
@@ -186,31 +186,36 @@ def _work(self:Operator):
 
     anis = [
         (
-            ['BRUTE.BFM'],
-            ['ANGRY_SMASH.ANI', 'HURT_FRONT.ANI']
+            ['BRUTE'],
+            ['ANGRY_SMASH', 'HURT_FRONT']
         )
         ,
         (
-            ['RAYNE.BFM', 'RAYNE_DRESS.BFM', 'RAYNE_SCHOOLGIRL.BFM', 'RAYNE_COWGIRL.BFM'],
-            ['LOCKED_WALK_LEFT.ANI', 'brute_grab.ani', 'combo_jk.ani', 'combo_jb.ani', 'pole_turn_left_180.ani', 'pole_horz_salto_release.ani', 'rail_blade_idle.ani', 'rail_slide.ani', 'combo_locked_b_groundstrike.ani', 'bite_stand_blade.ani', 'bite_stand_gun.ani', 'bite_behind_gun_alt.ani', 'bite_stand_gun_alt.ani', 
-             'WALK_FORWARD.ANI', 'RUN_FORWARD.ANI', 'POLE_JUMP.ANI', 'POLE_OFF.ANI', 'POLE_GRAB.ANI', 'POLE_DOWN_OFF.ANI', 'POLE_DISMOUNT_TO_WJ_LONG.ANI', 'POLE_LONGJUMP.ANI', 'BITE_STAND_KICK.ANI',  'COMBO_CIRCLE_KICK.ANI', 'RECOVERY_ONBACK_DEFAULT.ANI', 'DOUBLE_JUMP.ANI', 'FEED_REPEL.ANI', 'STAND_ALERT.ANI', 'locked_idle.ANI']
+            ['BIOMECH'],
+            ['ANGRY_SMASH', 'SWEEP_RIGHT', 'STAB']
+        )
+        ,
+        (
+            ['RAYNE', 'RAYNE_DRESS', 'RAYNE_SCHOOLGIRL', 'RAYNE_COWGIRL'],
+            ['LOCKED_WALK_LEFT', 'brute_grab', 'combo_jk', 'combo_jb', 'pole_turn_left_180', 'pole_horz_salto_release', 'rail_blade_idle', 'rail_slide', 'combo_locked_b_groundstrike', 'bite_stand_blade', 'bite_stand_gun', 'bite_behind_gun_alt', 'bite_stand_gun_alt', 
+             'WALK_FORWARD', 'RUN_FORWARD', 'POLE_JUMP', 'POLE_OFF', 'POLE_GRAB', 'POLE_DOWN_OFF', 'POLE_DISMOUNT_TO_WJ_LONG', 'POLE_LONGJUMP', 'BITE_STAND_KICK',  'COMBO_CIRCLE_KICK', 'RECOVERY_ONBACK_DEFAULT', 'DOUBLE_JUMP', 'FEED_REPEL', 'STAND_ALERT', 'locked_idle', 'PHONEMES']
         ),
         (
-            ['FERRIL.BFM'],
-            ['WALK_N.ANI', 'RUN_N.ANI', 'HIGH_JUMP_35.ANI', 'LEAP_ATTACK_KICK.ANI']
+            ['FERRIL'],
+            ['WALK_N', 'RUN_N', 'HIGH_JUMP_35', 'LEAP_ATTACK_KICK']
         ),
         (
-            ['SLEGION.BFM'],
-            ['WALKS.ANI', 'RUNN.ANI', 'COMBO1.ANI', 'ATTACK01.ANI', 'ATTACK02.ANI', 'BACKEVADEATTACK.ANI']
+            ['SLEGION'],
+            ['WALKS', 'RUNN', 'COMBO1', 'ATTACK01', 'ATTACK02', 'BACKEVADEATTACK']
         ),
         (
-            ['FOREMAN.BFM'],
-            ['WALK_N.ANI', 'RUN_N.ANI', 'ATTACK_COMBO.ANI', 'ANGRY_SMASH.ANI', 'FEED.ANI']
+            ['FOREMAN'],
+            ['WALK_N', 'RUN_N', 'ATTACK_COMBO', 'ANGRY_SMASH', 'FEED']
         ),
         ]
-    ch, bi, ai = 1,0,4
-    bfm_path = base_path / 'MODELS' / anis[ch][0][bi]
-    ani_path = base_path / 'ANIMATIONS' / Path(anis[ch][0][0]).stem / anis[ch][1][ai]
+    ch, bi, ai = 2,0,4
+    bfm_path = base_path / 'MODELS' / (anis[ch][0][bi] + '.BFM')
+    ani_path = base_path / 'ANIMATIONS' / Path(anis[ch][0][0]).stem / (anis[ch][1][ai]+'.ANI')
 
     trf = bpy_utils.SpacePresets.TRI2BPY
     skb_prov = bfm_imp.skb_provider(base_path / 'DATA', load_anims=True)
@@ -236,6 +241,7 @@ def _work(self:Operator):
     action = bpy.data.actions.new(ani_path.stem)
     arm.animation_data_create()
     arm.animation_data.action = action
+    #TODO Explicitly set bone.inherit_scale = 'FULL' during creation (optional, as it's the Blender default)
 
     fps = 24 
     numFrames = ani.header.numFrames
@@ -246,13 +252,20 @@ def _work(self:Operator):
             raise ValueError(f"Keyframe err, kf was {kf}")
 
     #[24.04.2025, IMPORTANT] See Nocturne/Editor/doc/Editor.pdf Coordinate System for more details about it
-
+    #[17.10.2026]
+    # The input position and scale keyframes are specified in a space where the origin is 
+    # the bone's rest position (the sum of BFM_Bones.pos), and the orientation matches Character space
     def add_pos(bpy_bone, kf, v:Vector):
-        bpy_bone.location = trf.conv_anim_pos(v.zxy)
+        bpy_bone.location = bpy_bone.matrix.to_3x3().inverted() @ trf.conv_anim_pos(v)
         bpy_bone.keyframe_insert("location", frame=kf+1)
 
     def add_scale(bpy_bone, kf, v:Vector):
-        bpy_bone.scale = trf.conv_anim_scale(v)
+        # Experiments show the engine fully inherits scale hierarchically but falls victim to shear.
+        # Blender cannot natively reproduce this, but since that shear is an unwanted optimization artifact.
+        # If a custom .ANI file sets "Bip01 L Forearm" scale to (1, 5, 1), the forearm 
+        # becomes thicker, but the angle between the upperarm and forearm changes simultaneously.
+        mat = bpy_bone.matrix.to_3x3()
+        bpy_bone.scale =  (mat.inverted() @ bpy_utils.Matrix.Diagonal( trf.conv_anim_scale(v)) @ mat).to_scale()
         bpy_bone.keyframe_insert("scale", frame=kf+1)
 
     def add_quat(bpy_bone, kf, v:Vector):
@@ -284,7 +297,7 @@ def _work(self:Operator):
     root_bone = next(b for b in arm.pose.bones if b.parent is None) #Note. We assume the existence of root motion bone
     for i in range(ani.root_pos_frames):
         entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ANI_File.ROOT_POS_TRACK_TYPE)
-        add_pos(root_bone, entity.kf, entity.vec.yzx) #Tests: combo_jk, RUN_FORWARD, LOCKED_WALK_LEFT, POLE_JUMP
+        add_pos(root_bone, entity.kf, entity.vec) #Tests: combo_jk, RUN_FORWARD, LOCKED_WALK_LEFT, POLE_JUMP
     
     pool_cursor.next_track()
     
