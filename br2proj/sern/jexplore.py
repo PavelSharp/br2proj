@@ -1,3 +1,4 @@
+from .sern_core import is_typed_namedtuple
 import dataclasses
 import json
 import enum
@@ -90,6 +91,8 @@ class DebugJSONEncoder(json.JSONEncoder):
             return self._encode(o.sern_jwrite())
         if isinstance(o, dict):
             return self._dict_encode(o)
+        if is_typed_namedtuple(type(o)):
+            return self._dict_encode(o._asdict())
         if isinstance(o, list | tuple):
             return self._list_encode(o)
         if isinstance(o, float | int | bool):

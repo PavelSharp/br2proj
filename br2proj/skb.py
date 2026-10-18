@@ -43,11 +43,11 @@ class SKB_Anim:
     name: ascii_str = sernAs(ascii_char * 30)
     ani_file_name: ascii_str = sernAs(ascii_char * 64)
     fps:float = sernAs(c_float)          #[EXPI 19.09.2026] #?? seems 30.0, 32.0,
-    numFrames: int = sernAs(c_int32)
+    numFrames: int = sernAs(c_int32)     #[NEW  18.10.2026] Overwritten at runtime by the linked animation duration in sub_722EF0
     tween_time:float = sernAs(c_float)   #[EXPI 19.09.2026] Transition time to next animation #0.1/0.3 -> frame duration, maybe? ??
     next_anim_ind:int = sernAs(c_int32)  #[EXPI 19.09.2026] Special values: -1 = freeze on last frame, -2 = infinite loop #?? 0, -1, -2... 426?
     play_frames:float = sernAs(c_float)  #[EXPI 19.09.2026] But 0.0 may have a special meaning (Manual/Driven Keyframing). #?? less, but very close to numFrames !!! delta = f(d)
-    mask:int = sernAs(c_int32)           #[EXPI 19.09.2026] bitmask: 1 - mirroring, 4 = Allow cache in engine [see sub_722410]. Tested on run_forward, flag 1 mirrors the start from the right foot to the left foot.
+    mask:int = sernAs(c_int32)           #[EXPI 19.09.2026] bitmask: 1 - mirroring, 2 - reverse [see sub_7227A0], 4 = Allow cache in engine [see sub_722410]. Tested on run_forward, flag 1 mirrors the start from the right foot to the left foot.
 
     numSounds:int = sernAs(c_int32) #[EXPI 19.09.2026]
     sounds:list[ascii_str] = sernAs(list[ascii_char * 64], rarg=KnownArg('numSounds')) #[EXPI 19.09.2026]
@@ -119,7 +119,7 @@ class SKB_File:
 # SKB_Bone.name_hash = tri_hash(str(SKB_Bone.name),0), where tri_hash is described in sub_786230
 # SKB_Anim.next_anim_ind = [-2, -1, ..., SKB_File.numAnims)
 # SKB_Anim.play_frames  = [0...SKB_Anim.numFrames]
-# SKB_Anim.mask = [0, 1, 4], but not for 5 (1|4)
+# SKB_Anim.mask = [0, 1, 4], but not for 2 and 5 (1|4)
 # SKB_Anim.markers = [0...SKB_Anim.numFrames] (for each)
 # SKB_Signal.type = [0, 1]
 # SKB_Signal.value = [0...SKB_Anim.numSounds) (for each if signal.type=1)
@@ -153,10 +153,3 @@ class SKB_File:
 # Consequently, the game engine might still contain legacy parsers for text-based 
 # equivalents. This theory perfectly explains the game's file extension pairings: 
 # text-based formats (SKL, DFM, TIFF) vs. compiled binary formats (SKB, BFM, TEX).
-
-#Легкие анимации
-#Почти все неизвестные поля по нулям, это должен быть хороший знак для начала исследования этого формата
-#rayne.bfm -> 
-#   stand_alert.ani - базовая стойка
-#   walk_forward_start.ani
-#   run_start.ani
