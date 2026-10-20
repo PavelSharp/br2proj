@@ -244,11 +244,11 @@ def _work(self:Operator):
     #TODO Explicitly set bone.inherit_scale = 'FULL' during creation (optional, as it's the Blender default)
 
     fps = 24 
-    numFrames = ani.header.numFrames
+    numFrames = ani.header.frames_count
     pool_cursor =  ani_imp.PoolCursor()
 
     def check_kf(kf):
-        if kf<0 or kf>=ani.header.numFrames:
+        if kf<0 or kf>=ani.header.frames_count:
             raise ValueError(f"Keyframe err, kf was {kf}")
 
     #[24.04.2025, IMPORTANT] See Nocturne/Editor/doc/Editor.pdf Coordinate System for more details about it
@@ -284,47 +284,47 @@ def _work(self:Operator):
             case 'EULER': add_quat(bpy_bone, kf, v)
             case _: assert_never(ent.type)    
 
-    pool_bytes = bytes(ani.animPool)
-    for ani_bone in ani.used_bones:
-        bpy_bone = arm.pose.bones[str(ani_bone.name)]
-        for k in range(ani_bone.numKeyFrames):
-            pool_entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_bone.tt)
+    pool_bytes = bytes(ani.anim_pool)
+    for ani_bone in ani.bone_tracks:
+        bpy_bone = arm.pose.bones[str(ani_bone.bone_name)]
+        for k in range(ani_bone.keyframes):
+            pool_entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_bone.track_type)
             add_ani_frame(bpy_bone, pool_entity.kf, pool_entity.type, pool_entity.vec)
         pool_cursor.next_track()
 
     main_pool_end = ani_imp.PoolCursor(pool_cursor.pos)
 
     root_bone = next(b for b in arm.pose.bones if b.parent is None) #Note. We assume the existence of root motion bone
-    for i in range(ani.root_pos_frames):
+    for i in range(ani.root_pos_keyframes):
         entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ANI_File.ROOT_POS_TRACK_TYPE)
         add_pos(root_bone, entity.kf, entity.vec) #Tests: combo_jk, RUN_FORWARD, LOCKED_WALK_LEFT, POLE_JUMP
     
     pool_cursor.next_track()
     
-    for i in range(ani.root_rot_frames):
+    for i in range(ani.root_rot_keyframes):
         entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ANI_File.ROOT_ROT_TRACK_TYPE)
         add_quat(root_bone, entity.kf, entity.vec)
 
     pool_cursor.next_track()
 
-    for entry in ani.unk1:
-        if entry.a > 0:
-            pool_cursor.pos += entry.a * 16
+    for entry in ani.tag_tracks:
+        if entry.pos_keyframes > 0:
+            pool_cursor.pos += entry.pos_keyframes * 16
             pool_cursor.next_track()
             
-        if entry.b > 0:
-            pool_cursor.pos += entry.b * 8
+        if entry.rot_keyframes > 0:
+            pool_cursor.pos += entry.rot_keyframes * 8
             pool_cursor.next_track()
             
-        if entry.c > 0:
-            pool_cursor.pos += entry.c * 16
+        if entry.scale_keyframes > 0:
+            pool_cursor.pos += entry.scale_keyframes * 16
             pool_cursor.next_track()
 
-    if pool_cursor.pos!=ani.header.animPoolSize: #TODO[Done] extra data RUN_FORWARD?
+    if pool_cursor.pos!=ani.header.anim_pool_size: #TODO[Done] extra data RUN_FORWARD?
         self.report({'WARNING'}, 'Warring. The pool has not been exhausted. See in console')
-        print(f'main_pool_end={main_pool_end} pool_ind={pool_cursor.pos}, header_pool_size={ani.header.animPoolSize}')
+        print(f'main_pool_end={main_pool_end} pool_ind={pool_cursor.pos}, header_pool_size={ani.header.anim_pool_size}')
     else:
-        print(f'Success! Пул исчерпан корректно: {pool_cursor.pos}/{ani.header.animPoolSize}')
+        print(f'Success! Пул исчерпан корректно: {pool_cursor.pos}/{ani.header.anim_pool_size}')
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
