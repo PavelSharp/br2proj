@@ -29,3 +29,65 @@ def tri_hash(bts: bytes | bytearray | str, init : int = 0) : #init : int32->uint
 #     }
 #     return (uint32_t)val;
 # }
+
+#================================
+#         MAIN SECTION
+#================================
+
+import math
+from typing import NamedTuple, Literal, TypeVar, Generic, Self
+from functools import cache as _cache
+
+_Tsc = TypeVar('_Tsc', float, int)
+
+class Vec3(NamedTuple, Generic[_Tsc]):
+    x: _Tsc
+    y: _Tsc
+    z: _Tsc
+    def __add__(self, o: Self): return self.__class__(self.x+o.x, self.y+o.y, self.z+o.z)
+    def __mul__(self, v: _Tsc): return self.__class__(self.x*v, self.y*v, self.z*v)
+    def __floordiv__(self, v: _Tsc): return self.__class__(self.x//v, self.y//v, self.z//v)
+
+class Vec4(NamedTuple, Generic[_Tsc]):
+    x: _Tsc
+    y: _Tsc
+    z: _Tsc
+    w: _Tsc
+    def __add__(self, o: Self): return self.__class__(self.x+o.x, self.y+o.y, self.z+o.z, self.w+o.w)
+    def __mul__(self, v: _Tsc): return self.__class__(self.x*v, self.y*v, self.z*v, self.w*v)
+    def __floordiv__(self, v: _Tsc): return self.__class__(self.x//v, self.y//v, self.z//v, self.w//v)
+
+
+class Vec3i(Vec3[int]): ...
+class Vec4i(Vec4[int]): ...
+class Vec3f(Vec3[float]): 
+    def length(self): return math.sqrt(self.x**2 + self.y**2 + self.z**2)
+class Vec4f(Vec4[float]):
+    def length(self): return math.sqrt(self.x**2 + self.y**2 + self.z**2 + self.w**2)
+
+PureEulerAxisOrder = Literal['XYZ', 'XZY', 'YXZ', 'YZX', 'ZXY', 'ZYX']
+class Euler(NamedTuple):
+    x: float
+    y: float
+    z: float
+    AXIS = 'unknown' #Cannot use PureEulerAxisOrder or ClassVar[PureEulerAxisOrder] annotations here
+    @classmethod
+    def zero(cls): return cls(0.0, 0.0, 0.0)
+    @staticmethod
+    @_cache
+    def _construct_impl(order: PureEulerAxisOrder): return type(f'PureEuler_{order}', (Euler,), {'AXIS': order})
+    @classmethod
+    def construct(cls, order: PureEulerAxisOrder): return cls._construct_impl(order)
+    @classmethod
+    def __class_getitem__(cls, order: PureEulerAxisOrder): return cls.construct(order)
+
+# Explicit subclasses ensure type safety.
+# a: PureEulerXYZ = PureEulerZXY(0,0,0) triggers a linter error.
+# But inline subscripts bypass static analysis, i.e.:
+# a: PureEuler['XYZ'] = PureEuler['ZXY'](0,0,0) will NOT trigger a linter error.
+class EulerXYZ(Euler['XYZ']): ...
+class EulerXZY(Euler['XZY']): ...
+class EulerYXZ(Euler['YXZ']): ...
+class EulerYZX(Euler['YZX']): ...
+class EulerZXY(Euler['ZXY']): ...
+class EulerZYX(Euler['ZYX']): ...

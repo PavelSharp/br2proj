@@ -225,6 +225,7 @@ def _work(self:Operator):
     bfm:BFM_File = sern_read.reader.read_all(bfm_path, BFM_File)
     skb, skb_path = skb_prov.provide(str(bfm.header.skb_name), True)
     ani:ANI_File = sern_read.reader.read_all(ani_path, ANI_File)
+    ani_anim = ani_imp.Animation.from_ani(ani)
     if DO_LOGS: 
         jlog(skb, skb_path, ani, ani_path)
 
@@ -245,86 +246,44 @@ def _work(self:Operator):
 
     fps = 24 
     numFrames = ani.header.frames_count
-    pool_cursor =  ani_imp.PoolCursor()
-
-    def check_kf(kf):
-        if kf<0 or kf>=ani.header.frames_count:
-            raise ValueError(f"Keyframe err, kf was {kf}")
-
+    
     #[24.04.2025, IMPORTANT] See Nocturne/Editor/doc/Editor.pdf Coordinate System for more details about it
     #[17.10.2026]
     # The input position and scale keyframes are specified in a space where the origin is 
     # the bone's rest position (the sum of BFM_Bones.pos), and the orientation matches Character space
-    def add_pos(bpy_bone, kf, v:Vector):
-        bpy_bone.location = bpy_bone.matrix.to_3x3().inverted() @ trf.conv_anim_pos(v)
-        bpy_bone.keyframe_insert("location", frame=kf+1)
 
-    def add_scale(bpy_bone, kf, v:Vector):
+    def add_pos(bpy_bone, key:ani_imp.VecKey):
+        bpy_bone.location = bpy_bone.matrix.to_3x3().inverted() @ trf.conv_anim_pos(Vector(key.vec))
+        bpy_bone.keyframe_insert("location", frame=key.frame+1)
+
+    def add_quat(bpy_bone, key:ani_imp.RotKey):
+        bpy_bone.rotation_mode = 'QUATERNION'
+        # In accordance with sub_7227A0, Euler angles are used only for
+        # compact storage, which are then converted by the engine into quaternion
+        # 'ZXY' Euler rotation order is proven by sub_720790
+        bpy_bone.rotation_quaternion = trf.conv_anim_rot(Euler(key.rot, key.rot.AXIS).to_quaternion())
+        bpy_bone.keyframe_insert("rotation_quaternion", frame=key.frame+1)
+        
+    def add_scale(bpy_bone, key:ani_imp.VecKey):
         # Experiments show the engine fully inherits scale hierarchically but falls victim to shear.
         # Blender cannot natively reproduce this, but since that shear is an unwanted optimization artifact.
         # If a custom .ANI file sets "Bip01 L Forearm" scale to (1, 5, 1), the forearm 
         # becomes thicker, but the angle between the upperarm and forearm changes simultaneously.
         mat = bpy_bone.matrix.to_3x3()
-        bpy_bone.scale =  (mat.inverted() @ bpy_utils.Matrix.Diagonal( trf.conv_anim_scale(v)) @ mat).to_scale()
-        bpy_bone.keyframe_insert("scale", frame=kf+1)
-
-    def add_quat(bpy_bone, kf, v:Vector):
-        bpy_bone.rotation_mode = 'QUATERNION'
-        # In accordance with sub_7227A0, Euler angles are used only for
-        # compact storage, which are then converted by the engine into quaternion
-        # 'ZXY' Euler rotation order is proven by sub_720790
-        quat = Euler((v.y,v.x,v.z), 'ZXY').to_quaternion()
-        bpy_bone.rotation_quaternion = trf.conv_anim_rot(quat)
-        bpy_bone.keyframe_insert("rotation_quaternion", frame=kf+1)
+        bpy_bone.scale =  (mat.inverted() @ bpy_utils.Matrix.Diagonal( trf.conv_anim_scale(Vector(key.vec))) @ mat).to_scale()
+        bpy_bone.keyframe_insert("scale", frame=key.frame+1)
     
-    def add_ani_frame(bpy_bone, kf:int, type: ani_imp.PoolEntityType, v:Vector):
-        match type:
-            case 'POS':add_pos(bpy_bone, kf, v)
-            case 'SCALE':add_scale(bpy_bone, kf, v)
-            case 'EULER': add_quat(bpy_bone, kf, v)
-            case _: assert_never(ent.type)    
-
-    pool_bytes = bytes(ani.anim_pool)
-    for ani_bone in ani.bone_tracks:
-        bpy_bone = arm.pose.bones[str(ani_bone.bone_name)]
-        for k in range(ani_bone.keyframes):
-            pool_entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ani_bone.track_type)
-            add_ani_frame(bpy_bone, pool_entity.kf, pool_entity.type, pool_entity.vec)
-        pool_cursor.next_track()
-
-    main_pool_end = ani_imp.PoolCursor(pool_cursor.pos)
-
     root_bone = next(b for b in arm.pose.bones if b.parent is None) #Note. We assume the existence of root motion bone
-    for i in range(ani.root_pos_keyframes):
-        entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ANI_File.ROOT_POS_TRACK_TYPE)
-        add_pos(root_bone, entity.kf, entity.vec) #Tests: combo_jk, RUN_FORWARD, LOCKED_WALK_LEFT, POLE_JUMP
-    
-    pool_cursor.next_track()
-    
-    for i in range(ani.root_rot_keyframes):
-        entity = ani_imp.PoolParser.parse(pool_cursor, pool_bytes, ANI_File.ROOT_ROT_TRACK_TYPE)
-        add_quat(root_bone, entity.kf, entity.vec)
+    #Tests for root motion: combo_jk, RUN_FORWARD, LOCKED_WALK_LEFT, POLE_JUMP
 
-    pool_cursor.next_track()
-
-    for entry in ani.tag_tracks:
-        if entry.pos_keyframes > 0:
-            pool_cursor.pos += entry.pos_keyframes * 16
-            pool_cursor.next_track()
-            
-        if entry.rot_keyframes > 0:
-            pool_cursor.pos += entry.rot_keyframes * 8
-            pool_cursor.next_track()
-            
-        if entry.scale_keyframes > 0:
-            pool_cursor.pos += entry.scale_keyframes * 16
-            pool_cursor.next_track()
-
-    if pool_cursor.pos!=ani.header.anim_pool_size: #TODO[Done] extra data RUN_FORWARD?
-        self.report({'WARNING'}, 'Warring. The pool has not been exhausted. See in console')
-        print(f'main_pool_end={main_pool_end} pool_ind={pool_cursor.pos}, header_pool_size={ani.header.anim_pool_size}')
-    else:
-        print(f'Success! Пул исчерпан корректно: {pool_cursor.pos}/{ani.header.anim_pool_size}')
+    for bone_name, bone in ani_anim.bones.items():
+        bpy_bone = arm.pose.bones[bone_name] if bone_name else root_bone
+        for pos in bone.tracks.pos_track:
+            add_pos(bpy_bone, pos)
+        for rot in bone.tracks.rot_track:
+            add_quat(bpy_bone, rot)
+        for scale in bone.tracks.scale_track:
+            add_scale(bpy_bone, scale)
 
     bpy.ops.object.mode_set(mode='OBJECT')
 

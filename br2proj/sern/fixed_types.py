@@ -218,6 +218,13 @@ class align16(align_factory * 16): pass
 class ascii_str(Array): #, metaclass=_AsciiArrayMeta
     _length_ = 0 #type: ignore
     _type_ = c_uint8 #type: ignore
+
+    @classmethod
+    def from_str(cls, text:str, n:int):
+        if len(text)>=n: raise ValueError('Not enough space')
+        data = text.encode('ascii', 'strict').ljust(n, b'\x00')
+        return (ascii_char*n)(*data) #NOTE: ascii_char*n must be cached by sern
+
     def __str__(self):
         #self.value вернет строку до первого \0, в случае отсутствия - вся строка
         data = bytes(self)
@@ -237,6 +244,7 @@ class ascii_str(Array): #, metaclass=_AsciiArrayMeta
 
 class ascii_char(metaclass=_mulmeta): #We don't inherit from c_char(c_uint8)
     @staticmethod
+    @_cache
     def create_mul_type(count: int):
         return type(f'ascii_str_{count}', (ascii_str,), {'_length_': count})
 

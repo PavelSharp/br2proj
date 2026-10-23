@@ -59,6 +59,28 @@ class ANI_File:
     root_rot_keyframes:int = sernAs(c_int32) #[EXPI 21.09.2026] #(0)
     tag_tracks: list[ANI_TagTrack] = sernAs(rarg=KnownArg('header').tag_tracks_count) #[EXPI 22.09.2026]
 
+    #NOTE: Temporary hot-fix method, sern doesn't support binary writing yet
+    def dbg_to_bytes(self):
+        import struct
+        hdr = self.header
+
+        assert hdr.version == 3
+        assert hdr.anim_pool_size == len(self.anim_pool)
+        assert hdr.bone_tracks_count == len(self.bone_tracks)
+        assert hdr.tag_tracks_count == len(self.tag_tracks)
+
+        bts = bytearray()
+        bts.extend(struct.pack('<iiiii', hdr.version, hdr.frames_count, hdr.bone_tracks_count, hdr.tag_tracks_count, hdr.anim_pool_size))
+        
+        bts.extend(bytes(self.anim_pool))
+        for tr in self.bone_tracks:
+            bts.extend(struct.pack('<24sii', bytes(tr.bone_name), tr.track_type_raw, tr.keyframes))
+
+        bts.extend(struct.pack('<ii', self.root_pos_keyframes, self.root_rot_keyframes))
+        for tag in self.tag_tracks:
+            bts.extend(struct.pack('<24s24siii', bytes(tag.tag_name), bytes(tag.bone_name), tag.pos_keyframes, tag.rot_keyframes, tag.scale_keyframes))
+        return bytes(bts)
+
 #================================
 #            NOTES
 #================================
