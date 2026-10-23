@@ -33,7 +33,7 @@ class BFM_Part:
 
 
 @fixed_dataclass
-class BFM_AttachedMesh:
+class BFM_AttachedMesh: #TODO rename to BFM_AttachmentTag or BFM_Socket
     name:ascii_str = sernAs(ascii_char*24) #smb_name
     bone:int = sernAs(c_int32) #// tip is the sub-bounding box's coord. sys. reference point
     a:Array[c_float] = sernAs(c_float*12) #?? this should be attaching info AND BBOX!

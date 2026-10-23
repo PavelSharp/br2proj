@@ -95,6 +95,21 @@ class ANI_File:
 
 
 #================================
+#         TAG ANALYSIS
+#================================
+# A scan of all game files yields the following results 
+# Note: ANI list is filtered to include only tags with an attached bone.
+# ====[Set of all tags collected from .ANI files]====
+# base, bat, belly, bladeL, bladeR, chest, gun_tip, gunL, gunR, hammer, knife, left, lgun_tip, Lspark, mouth, noseL, noseR, right, Rspark, staff, sunbeam, sword, tip
+# ====[Set of all tags collected from .BFM files]====
+# base, belly, blade_L, blade_R, bladeL, bladeR, cannon, chest, gunL, gunR, hammer, lbreast, left, lshoulder, lthigh, mouth, noseL, noseR, rbreast, right, rshoulder, rthigh, sunbeam, sword, tip
+# ====[.BFM unique (never animated)]====
+# blade_L, blade_R, cannon, lbreast, lshoulder, lthigh, rbreast, rshoulder, rthigh
+# ====[.ANI unique (not all tags are attached parts)]====
+# bat, gun_tip, knife, lgun_tip, Lspark, Rspark, staff
+# Conclusion: There is a distinct group of bone-bound tags that do not serve as anchor points for attachment meshes.
+
+#================================
 #        ANIMATION POOL
 #================================
 # The anim_pool is a continuous byte stream partitioned into three sequential
@@ -160,6 +175,7 @@ class ANI_File:
 #================================
 # Here is the complete list of tags obtained by scanning all game files. 
 # They are split into two groups: where the bone name is empty and where it is assigned.
+# And finally, group 3 shows the tags collected from .BFM files.
 # NOTE 1. Results for BR2GOC and BR2Cut versions are identical.
 # NOTE 2. Left of ':' are .SKB filenames without extension to save space.
 
@@ -195,6 +211,25 @@ class ANI_File:
 # UNRAVELER: belly(Bip01 Prop3)
 # ZERENZKI: staff(Bip01 Prop1)
 # ZPUNKF: gunR(Bip01 R Hand), knife(Bip01 L Hand)
+
+
+#==[All discovered tags (sockets) from .BFM files]==
+# BIO_ARMOR.BFM: cannon, lshoulder, lthigh, rshoulder, rthigh
+# BOAR.BFM: chest, gunR
+# BRUTE.BFM: mouth, noseL, noseR
+# DHAMPIR.BFM, KESTRAL.BFM: bladeL, bladeR
+# DHAMPIR_F.BFM, RAYNE.BFM, RAYNE_ARMOR.BFM, RAYNE_COWGIRL.BFM, RAYNE_DARK.BFM, RAYNE_DRESS.BFM, RAYNE_DRESS_BLUE.BFM, RAYNE_DRESS_DRAGON.BFM, RAYNE_DRESS_GREEN.BFM, RAYNE_DRESS_RED.BFM, RAYNE_SCHOOLGIRL.BFM: bladeL, bladeR, gunL, gunR
+# EPHEMERA.BFM: blade_L, blade_R
+# FOREMAN.BFM: hammer
+# FPUNK_FEMALE.BFM, LPUNK.BFM, POLICEMAN.BFM, UPUNK.BFM, ZPUNK.BFM, ZPUNKF.BFM: gunR
+# KAGAN.BFM: gunR, sunbeam, sword
+# KAGEN_ELITE.BFM: gunL, gunR
+# NINJAF.BFM, NINJAM.BFM: sword
+# SLEGION.BFM: left, right
+# SLEZZ.BFM: lbreast, rbreast
+# TURRET_BIOGUN.BFM: tip
+# TURRET_MACHINEGUN.BFM, TURRET_SUNGUN.BFM: base, tip
+# UNRAVELER.BFM: belly, mouth
 
 
 #================================
