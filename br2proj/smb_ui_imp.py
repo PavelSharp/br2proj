@@ -57,7 +57,7 @@ class ImportSMB(Operator, ImportHelper):
             ('COLLECTION', "Collection", "Group objects into a new collection", 'OUTLINER_COLLECTION', 1),
             ('EMPTY', "Empty", "Group objects into a new empty", 'OUTLINER_OB_EMPTY', 2),
         ],
-        default='COLLECTION'
+        default='EMPTY'
     )
 
     group_container: EnumProperty(
@@ -68,7 +68,7 @@ class ImportSMB(Operator, ImportHelper):
             ('COLLECTION', "Collection", "The group will be represented by the collection", 'OUTLINER_COLLECTION', 1),
             ('EMPTY', "Empty", "The group will be represented by a empty", 'OUTLINER_OB_EMPTY', 2),
         ],
-        default='COLLECTION'
+        default='EMPTY' # EMPTY by default since the model can be used for attaching to a socket
     )
 
     use_bound_boxes:BoolProperty(

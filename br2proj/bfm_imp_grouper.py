@@ -143,7 +143,8 @@ class bfm_prefix_grouper(bfm_grouper):
         if group_name.startswith('cage'):
             path.append(node('cage', 'COLOR_03'))            
         
-        path.append(node(group_name, self._GROUP_COLORS.get(group_name, 'NONE'), False))         
+        if group_name: #NOTE: hotfix for the FPUNK_FEMALE.BFM
+            path.append(node(group_name, self._GROUP_COLORS.get(group_name, 'NONE'), False))
 
         match name.side:
             case 'l': object_name = f'{object_name} L'

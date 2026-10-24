@@ -57,6 +57,12 @@ class ImportBFM(Operator, ImportHelper):
             default=True,
     )
 
+    use_sockets:BoolProperty(
+        name='Sockets',
+        description='Import attachment sockets from file',
+        default=True,
+    )
+
     #use_uv_coords:ui_decors.known_option('use_uv_coords')
     #use_materials:ui_decors.known_option('use_materials')
     #use_custom_normals: ui_decors.known_option('use_custom_normals')
@@ -79,10 +85,11 @@ class ImportBFM(Operator, ImportHelper):
             #row.prop(self, "use_collection", icon="OUTLINER_COLLECTION")
             #body.prop(self, 'use_collection', icon='OUTLINER_COLLECTION')
 
-        header, body = self.layout.panel("BR2PROJ_import_include")
+        header, body = self.layout.panel("BR2PROJ_import_include") #, default_closed=True
         header.label(text="Include")
         if body:
             self.draw_known_options(context, body)
+            self.draw_icon_checkbox(context, body, 'use_sockets', 'EMPTY_AXIS')
 
             #self.draw_icon_checkbox(context, body, 'use_custom_normals', 'NORMALS_FACE')
             #self.draw_icon_checkbox(context, body, 'use_uv_coords', 'UV')
@@ -122,8 +129,9 @@ class ImportBFM(Operator, ImportHelper):
             linker=linker,
             create_materials=self.use_materials,
             tex_prov=tex,
-            mesh_flags=bfm_imp.MeshFlags.from_bools(self.use_custom_normals, self.use_uv_coords)
-        )        
+            mesh_flags=bfm_imp.MeshFlags.from_bools(self.use_custom_normals, self.use_uv_coords),
+            sockets=self.use_sockets
+        )
 
         for file in self.files:
             path = Path(self.directory) / file.name

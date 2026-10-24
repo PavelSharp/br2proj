@@ -180,25 +180,24 @@ def jlog(*args):
 def _work(self:Operator):
     DO_LOGS = False
     DO_TEXTURES = True
+    DO_SOCKETS = True
 
     #TODO default armature name should be in format RIG-rayne
     #TODO [Попробовать make_compatible()] SLEGION.BFM + COMBO1.ANI где-то происходит нежелательная смена знака в угле
 
-    anis = [
+    ANIMATIONS_DB = [
         (
             ['BRUTE'],
             ['ANGRY_SMASH', 'HURT_FRONT']
-        )
-        ,
+        ),
         (
             ['BIOMECH'],
             ['ANGRY_SMASH', 'SWEEP_RIGHT', 'STAB']
-        )
-        ,
+        ),
         (
             ['RAYNE', 'RAYNE_DRESS', 'RAYNE_SCHOOLGIRL', 'RAYNE_COWGIRL'],
             ['LOCKED_WALK_LEFT', 'brute_grab', 'combo_jk', 'combo_jb', 'pole_turn_left_180', 'pole_horz_salto_release', 'rail_blade_idle', 'rail_slide', 'combo_locked_b_groundstrike', 'bite_stand_blade', 'bite_stand_gun', 'bite_behind_gun_alt', 'bite_stand_gun_alt', 
-             'WALK_FORWARD', 'RUN_FORWARD', 'POLE_JUMP', 'POLE_OFF', 'POLE_GRAB', 'POLE_DOWN_OFF', 'POLE_DISMOUNT_TO_WJ_LONG', 'POLE_LONGJUMP', 'BITE_STAND_KICK',  'COMBO_CIRCLE_KICK', 'RECOVERY_ONBACK_DEFAULT', 'DOUBLE_JUMP', 'FEED_REPEL', 'STAND_ALERT', 'locked_idle', 'PHONEMES']
+                'WALK_FORWARD', 'RUN_FORWARD', 'POLE_JUMP', 'POLE_OFF', 'POLE_GRAB', 'POLE_DOWN_OFF', 'POLE_DISMOUNT_TO_WJ_LONG', 'POLE_LONGJUMP', 'BITE_STAND_KICK',  'COMBO_CIRCLE_KICK', 'RECOVERY_ONBACK_DEFAULT', 'DOUBLE_JUMP', 'FEED_REPEL', 'STAND_ALERT', 'locked_idle', 'PHONEMES', 'combo_b']
         ),
         (
             ['FERRIL'],
@@ -213,14 +212,23 @@ def _work(self:Operator):
             ['WALK_N', 'RUN_N', 'ATTACK_COMBO', 'ANGRY_SMASH', 'FEED']
         ),
         ]
+
     ch, bi, ai = 2,0,4
-    bfm_path = base_path / 'MODELS' / (anis[ch][0][bi] + '.BFM')
-    ani_path = base_path / 'ANIMATIONS' / Path(anis[ch][0][0]).stem / (anis[ch][1][ai]+'.ANI')
+    socki = 4
+    models_path, anims_path = base_path / 'MODELS', base_path / 'ANIMATIONS'
+    bfm_path = models_path / (ANIMATIONS_DB[ch][0][bi] + '.BFM')
+    ani_path = anims_path / Path(ANIMATIONS_DB[ch][0][0]).stem / (ANIMATIONS_DB[ch][1][ai]+'.ANI')
 
     trf = bpy_utils.SpacePresets.TRI2BPY
+    actual_tex_prov = tex_prov if DO_TEXTURES else null_tex_prov
     skb_prov = bfm_imp.skb_provider(base_path / 'DATA', load_anims=True)
     linker = bfm_imp.bfm_linker(True, bfm_imp.bfm_prefix_grouper())
-    loader = bfm_imp.bfm_importer(trf=trf, linker=linker, create_materials = DO_TEXTURES, skb_prov=skb_prov, tex_prov= tex_prov if DO_TEXTURES else null_tex_prov)
+    loader = bfm_imp.bfm_importer(trf=trf, linker=linker, create_materials = DO_TEXTURES, skb_prov=skb_prov, tex_prov=actual_tex_prov, sockets=True)
+    socket_loader = smb_imp.smb_importer(
+        linker=smb_imp.smb_linker(bpy_utils.get_top_collection(), smb_imp.LinkKinds.EmptyEmpty, transform=trf.space.to_4x4()),
+        name_groups=True, create_materials=DO_TEXTURES, tex_prov=actual_tex_prov, anim_prov=smb_imp.smb_action_provider(),
+    )
+
 
     bfm:BFM_File = sern_read.reader.read_all(bfm_path, BFM_File)
     skb, skb_path = skb_prov.provide(str(bfm.header.skb_name), True)
@@ -229,8 +237,44 @@ def _work(self:Operator):
     if DO_LOGS: 
         jlog(skb, skb_path, ani, ani_path)
 
-
     coll = loader.load((bfm, bfm_path.stem))
+
+    if DO_SOCKETS:
+        sockets_collection = coll.children.get('sockets')
+        socket_cache = {}
+
+        def unlink_from_all_hierarchy(root_obj: bpy.types.Object):
+            bpy_utils.unlink_from_all(root_obj)
+            for child in root_obj.children:
+                unlink_from_all_hierarchy(child)
+
+        def clone_hierarchy(source_obj: bpy.types.Object, target_collection: bpy.types.Collection) -> bpy.types.Object:
+            new_obj = source_obj.copy()
+            target_collection.objects.link(new_obj)
+            for child in source_obj.children:
+                new_child = clone_hierarchy(child, target_collection)
+                new_child.parent = new_obj
+                new_child.parent_type = child.parent_type
+            return new_obj
+
+        def load_socket_cache(path:Path) -> bpy.types.Object:
+            if path not in socket_cache:
+                bpy_socket:bpy.types.Object = socket_loader.load(path)
+                unlink_from_all_hierarchy(bpy_socket)
+                socket_cache[path] = bpy_socket
+            ret = clone_hierarchy(socket_cache[path], sockets_collection)
+            return ret
+        
+        for socket in bfm.sockets:
+            socket_name = str(socket.name)
+            bpy_socket_emp = sockets_collection.objects.get(socket_name)
+            assert bpy_socket_emp is not None
+            socket_models = next(s[1] for s in SOCKET_ATTACHMENTS_DB if socket_name in s[0])
+            socket_model = socket_models[socki % len(socket_models)]
+            socket_path = models_path / (socket_model + '.SMB')
+            bpy_socket = load_socket_cache(socket_path)#socket_loader.load(socket_path)
+            bpy_socket.parent = bpy_socket_emp
+            bpy_socket.parent_type = 'OBJECT'
 
     arm:bpy.types.Object = None
     for obj in coll.objects:
@@ -302,6 +346,33 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(SandboxOp)
+
+SOCKET_ATTACHMENTS_DB = [
+    (['gunL', 'gunR'],
+     ['WEAPONS_RAYNES_GUN', 'WEAPONS_ARMOR_RAYNES_GUN', 'WEAPONS_COWGIRL_RAYNES_GUN', 'WEAPONS_DARK_RAYNES_GUN', 'WEAPONS_RAYNE_DESERT EAGLE_GUN',
+      'WEAPON_GUN_UZI', 'WEAPON_GUN_SHOTGUN', 'WEAPON_WOODEN_BAT', 'WEAPON_ALUMINUM_BAT', 'WEAPON_AXE', 'WEAPON_SHOVEL',
+      'KAGANELITE_GUN', 'PANZERFAUST', 'MOLOTOV_COCKTAIL',
+      'CROWBAR', 'MAC10']),
+    (['bladeR', 'bladeL'],
+     ['WEAPONS_RAYNE_BLADE_01', 'WEAPONS_RAYNE_BLADE_ARMOR',
+      'WEAPONS_RAYNE_BLADE_COWGIRL', 'WEAPONS_RAYNE_BLADE_DARK',
+      'WEAPON_DHAMPIR_BLADES', 'KESTRAL_BLADE', 'SLEGION_BLADE']),
+    (['blade_R', 'blade_L'], ['EPHEMERA_SHADOW_DAGGER', 'WEAPONS_RAYNE_BLADE_01']),
+    (['sword'], ['WEAPON_KAGAN_SWORD', 'KAGANELITE_SABER', 'WEAPONS_RAYNE_KATANA', 'NINJAM_BLADE']),
+    (['hammer'], ['FOREMAN_HAMMER', 'FOREMAN_WRENCH']),
+    #(['tip'], ['MUZZLEFLASHDBL', 'NEWFLASH', 'WEAPONSHELL-FLAME']),
+    (['cannon'], ['PANSC_MISSLE', 'ROCKET']),
+    (['left', 'right'], ['SLEGION_BLADE']),
+    (['lbreast', 'rbreast'], ['SLEZZ_GOOBALL']),
+    (['lshoulder', 'rshoulder'], ['BR_CRATE_2FFT', 'MARK_BARREL']),
+    (['lthigh', 'rthigh'], ['ST_FLASHLIGHT']),
+    #(['noseL', 'noseR'], ['BLOODSTORM_BUBBLE01', 'BLOODSTORM_BUBBLE02']),
+    (['chest'], ['MANS_BOARTUSKS', 'HEART.BFM']),
+    (['mouth'], ['UNRAVELER_BALL', 'PARK_ANIMAL_BONE_LARGE', 'LUNGS.BFM']),
+    (['belly'], ['UNRAVELER_SM_MEAT_CHUNK', 'UNRAVELER_SM_LUNG']),
+    (['sunbeam'], ['SUN_BALL']),
+    #(['base'], ['SEWER_LIFT_16FT', 'PLATFORM_1_GENERIC'])
+]
 
 #For RAYNE.BFM these animations are very useful.
 #JUMP.ANI RECOVERY_ONBACK_DEFAULT.ANI, COMBO_CIRCLE_KICK.ANI

@@ -18,6 +18,7 @@ from .bfm import (
     BFM_TexPack,
     BFM_MeshDesc,
     BFM_MeshGeometry,
+    BFM_Socket
 )
 from .skb import (
     SKB_File,
@@ -58,15 +59,16 @@ class bfm_collection_tree:
     name: str
     color: BPY_COLELCTION_COLOR_TAG
     allow_collapse:bool
+    is_transparent: bool = False
 
     collections: list['bfm_collection_tree'] = field(default_factory=list)
     objects: list[bpy.types.Object] = field(default_factory=list)
 
-    def find_or_create_child(self, name: str, color: BPY_COLELCTION_COLOR_TAG, allow_collapse: bool):
+    def find_or_create_child(self, name: str, color: BPY_COLELCTION_COLOR_TAG, allow_collapse: bool, is_transparent: bool = False):
         for child in self.collections:
             if child.name == name:
                 return child    
-        child = bfm_collection_tree(name, color, allow_collapse)
+        child = bfm_collection_tree(name, color, allow_collapse, is_transparent)
         self.collections.append(child)
         return child
     
@@ -132,8 +134,8 @@ class bfm_collection_tree:
             for nid in nids:
                 paths[nid][0].name = name
 
-    def bpy_build(self, bpy_parent_col: bpy.types.Collection, allow_root:bool = True):
-        if allow_root:
+    def bpy_build(self, bpy_parent_col: bpy.types.Collection):
+        if not self.is_transparent:
             bpy_col = bpy.data.collections.new(self.name)
             bpy_utils.link_to_collection(bpy_col, bpy_parent_col)
             if self.color != 'NONE':
@@ -149,9 +151,10 @@ class bfm_collection_tree:
         return bpy_col
 
     def print_tree(self, gr_indent: str = '', indent: str = ''):
+        folder_icon = '👻' if self.is_transparent else '📁'
         color = f' [{self.color}]' if self.color != 'NONE' else ''
         collaps = ' [+]' if self.allow_collapse else ''
-        print(f'{gr_indent}📁 {self.name}{color}{collaps}')
+        print(f'{gr_indent}{folder_icon} {self.name}{color}{collaps}')
         items = self.collections + self.objects
         for i, item in enumerate(items):
             gr_inc, it_inc = ('└── ', '    ') if i == len(items) - 1 else ('├── ', '│   ')
@@ -169,19 +172,28 @@ class bfm_linker:
     _col_tree: bfm_collection_tree = field(init=False)
 
     def new_container(self, name: str):
-        self._col_tree = bfm_collection_tree(name, 'NONE', False)
+        self._col_tree = bfm_collection_tree(name, 'NONE', False, not self.allow_model_collection)
 
     def end_container(self):
         self._col_tree.collapse()
         self._col_tree.resolve_collisions()
-        return self._col_tree.bpy_build(self.base_collection, self.allow_model_collection)
+        return self._col_tree.bpy_build(self.base_collection) #
 
     def link_root(self, bpy_obj:bpy.types.Object):
         bpy_obj.matrix_world = self.transform
         self._col_tree.objects.append(bpy_obj)
 
+    def _link_flat(self, bpy_obj: bpy.types.Object, category_name:str, color:BPY_COLELCTION_COLOR_TAG, apply_world_matrix:bool):
+        root = self._col_tree.find_or_create_child(category_name, color, False, False)
+        root.objects.append(bpy_obj)
+        if apply_world_matrix: bpy_obj.matrix_world = self.transform
+
+    def link_category(self, bpy_obj: bpy.types.Object, category:Literal['sockets']):
+        match category:
+            case 'sockets': self._link_flat(bpy_obj, category, 'COLOR_01', False)
+
     def link_child(self, bpy_obj:bpy.types.Object, part_name:str):
-        root = self._col_tree
+        root = self._col_tree.find_or_create_child('_main', 'NONE', False, True)
         path = self.grouper.get_group_path(part_name)
         for node in path:
             root = root.find_or_create_child(node.name, node.color, node.allow_collapse)
@@ -191,7 +203,7 @@ class bfm_linker:
 _BoneDict = dict[int, dict[float, list[int]]]
 
 @dataclass
-class _Armature:
+class _Armature: #TODO Rename to OrderedArmaure
     arm_obj: bpy.types.Object
     bone_names: list[str] = field(init=False, default_factory=list)
     def bone_name(self, ind:int): 
@@ -289,6 +301,21 @@ class bfm_builder:
         return bpy_mesh, bone_dict
     
     @staticmethod
+    def build_socket(trf:SpaceTransformer, socket:BFM_Socket, arm: _Armature):
+        socket_matrix = bpy_utils.Matrix(socket.matrix.rows + ((0,0,0,1),))
+        socket_bone = arm.arm_obj.data.bones[arm.bone_name(socket.bone)] #TODO may socket.bone==-1?
+
+        bpy_socket = bpy.data.objects.new(str(socket.name), None)
+
+        bpy_socket.parent = arm.arm_obj
+        bpy_socket.parent_type = 'BONE'
+        bpy_socket.parent_bone = socket_bone.name
+
+        bpy_socket.matrix_local = socket_bone.matrix_local.to_3x3().inverted().to_4x4() @ trf.change_space(socket_matrix)
+        bpy_socket.matrix_parent_inverse = bpy_utils.Matrix.Translation((0, -socket_bone.length, 0))
+        return bpy_socket
+
+    @staticmethod
     def apply_armature(bpy_obj:bpy.types.Object, bone_dict:_BoneDict, arm:_Armature):
         bpy_arm_mod = bpy_obj.modifiers.new(name='Armature', type='ARMATURE')
         bpy_arm_mod.object = arm.arm_obj # type: ignore
@@ -309,7 +336,8 @@ class bfm_importer:
     create_materials:bool = False
     tex_prov: null_tex_provider = field(default_factory=null_tex_provider)
     mesh_flags:MeshFlags = MeshFlags.ALL
-    part_bound_boxes:ObjectLoadState = ObjectLoadState.NOT_LOAD
+    sockets: bool = True #TODO vs ObjectLoadState
+    #part_bound_boxes: ObjectLoadState = True # TODO: unimplemented
 
     def build_bpy_mats(self, mats: Iterable[BFM_TexPack]):
         if self.create_materials:
@@ -342,6 +370,12 @@ class bfm_importer:
                 bpy_obj.data.materials.append(bpy_mats[tp_ind])
             
             self.linker.link_child(bpy_obj, part_name)
+
+        if self.sockets:
+            for socket in bfm.sockets:
+                bpy_socket = bfm_builder.build_socket(self.trf, socket, arm)
+                self.linker.link_category(bpy_socket, 'sockets')
+
         bpy.context.view_layer.update()
 
         return self.linker.end_container()
