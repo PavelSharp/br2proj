@@ -18,7 +18,7 @@ class BFM_Header:
     numParts:int = sernAs(c_int32)
     numBones:int = sernAs(c_int32)
     numTexPacks:int = sernAs(c_int32)
-    numAttachedMeshes:int = sernAs(c_int32) #// like blades&guns
+    numSockets:int = sernAs(c_int32) #// like blades&guns
     a:int = sernAs(c_int32) #/? 1 always
     b:int = sernAs(c_int32) #/? 0 always
     skb_name: ascii_str = sernAs(ascii_char * 80) #// SKB identifier
@@ -33,12 +33,12 @@ class BFM_Part:
 
 
 @fixed_dataclass
-class BFM_AttachedMesh: #TODO rename to BFM_AttachmentTag or BFM_Socket
+class BFM_Socket:
     name:ascii_str = sernAs(ascii_char*24) #smb_name
     bone:int = sernAs(c_int32) #// tip is the sub-bounding box's coord. sys. reference point
-    a:Array[c_float] = sernAs(c_float*12) #?? this should be attaching info AND BBOX!
+    matrix:Matrixf3x4RM #?? this should be attaching info AND BBOX!
     #[10.03.2025] Не удалось подтвердить, что в .a содержится bound box
-
+    #[23.10.2026] 3x4 affine matrix given in Character Space, the translation origin is relative to the attachment bone
 
 @sern_dataclass
 class BFM_MeshDesc:
@@ -110,7 +110,7 @@ class BFM_MeshGeometry:
 class BFM_File:
     header:BFM_Header
     parts:list[BFM_Part]
-    attached_meshes:list[BFM_AttachedMesh]
+    sockets:list[BFM_Socket]
     text_packs: list[BFM_TexPack]
     bones:BFM_Bones
     total_meshes: int = sernAs(c_int32) #BFM_Header.numParts + numGapMeshes,
@@ -120,11 +120,11 @@ class BFM_File:
     @classmethod
     def sern_read(cls, rdr:sern_read.reader):
         dict =  rdr.fields_read(cls, ['header'])
-        hdr = dict['header']
+        hdr:BFM_Header = dict['header']
 
         dict |= rdr.top_fields_read(cls, 
                 ('parts', hdr.numParts),
-                ('attached_meshes', hdr.numAttachedMeshes),
+                ('sockets', hdr.numSockets),
                 ('text_packs', hdr.numTexPacks),
                 ('bones', hdr.numBones),
                 'total_meshes',
