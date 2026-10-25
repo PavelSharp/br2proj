@@ -50,17 +50,21 @@ class point2f(c_float * 2):
     #Удобство в том, что оператор [n] для Си массивов обеспечивает
     #автоматическое преобразование во float (т.е. доступ к .value)
     @property
-    def x(self): return self[0]
+    def x(self) -> float: return self[0]
     @property
-    def y(self): return self[1]    
+    def y(self) -> float: return self[1]
+    @property
+    def xy(self): return self.x, self.y
 
 class point3f(c_float * 3):
     @property
-    def x(self): return self[0]
+    def x(self) -> float: return self[0]
     @property
-    def y(self): return self[1] 
+    def y(self) -> float: return self[1] 
     @property
-    def z(self): return self[2]
+    def z(self) -> float: return self[2]
+    @property
+    def xyz(self): return self.x, self.y, self.z
 
 class quaternion(c_float*4):
     @property

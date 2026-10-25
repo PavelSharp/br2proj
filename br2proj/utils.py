@@ -65,21 +65,21 @@ class Vec3f(Vec3[float]):
 class Vec4f(Vec4[float]):
     def length(self): return math.sqrt(self.x**2 + self.y**2 + self.z**2 + self.w**2)
 
-PureEulerAxisOrder = Literal['XYZ', 'XZY', 'YXZ', 'YZX', 'ZXY', 'ZYX']
+EulerAxisOrder = Literal['XYZ', 'XZY', 'YXZ', 'YZX', 'ZXY', 'ZYX']
 class Euler(NamedTuple):
     x: float
     y: float
     z: float
-    AXIS = 'unknown' #Cannot use PureEulerAxisOrder or ClassVar[PureEulerAxisOrder] annotations here
+    AXIS = 'unknown' #Cannot use EulerAxisOrder or ClassVar[EulerAxisOrder] annotations here
     @classmethod
     def zero(cls): return cls(0.0, 0.0, 0.0)
     @staticmethod
     @_cache
-    def _construct_impl(order: PureEulerAxisOrder): return type(f'PureEuler_{order}', (Euler,), {'AXIS': order})
+    def _construct_impl(order: EulerAxisOrder): return type(f'PureEuler_{order}', (Euler,), {'AXIS': order})
     @classmethod
-    def construct(cls, order: PureEulerAxisOrder): return cls._construct_impl(order)
+    def construct(cls, order: EulerAxisOrder): return cls._construct_impl(order)
     @classmethod
-    def __class_getitem__(cls, order: PureEulerAxisOrder): return cls.construct(order)
+    def __class_getitem__(cls, order: EulerAxisOrder): return cls.construct(order)
 
 # Explicit subclasses ensure type safety.
 # a: PureEulerXYZ = PureEulerZXY(0,0,0) triggers a linter error.

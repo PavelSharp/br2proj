@@ -65,6 +65,24 @@ def restored_playhead(target_frame: int | float | None = None):
     finally:
         bpy.context.scene.frame_set(src_frame, subframe=src_subframe)
 
+@contextmanager
+def switched_mode(target_obj: bpy.types.Object, target_mode: Literal['OBJECT', 'EDIT', 'POSE']):
+    old_active = bpy.context.view_layer.objects.active
+    old_mode = old_active.mode if old_active else 'OBJECT'
+    old_selected = list(bpy.context.selected_objects)
+
+    bpy.context.view_layer.objects.active = target_obj
+    target_obj.select_set(True)
+    bpy.ops.object.mode_set(mode=target_mode)
+    try:
+        yield
+    finally:
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        if old_active: bpy.context.view_layer.objects.active = old_active
+        for o in old_selected: o.select_set(True)
+        if old_mode!='OBJECT': bpy.ops.object.mode_set(mode=old_mode)  
+
 #================================
 #		  COLLECTION API
 #================================

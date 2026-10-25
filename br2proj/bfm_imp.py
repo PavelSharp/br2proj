@@ -1,8 +1,10 @@
 import enum
 from pathlib import Path
+from functools import cache as _cache
 from dataclasses import dataclass, field
 import math
-from typing import Any
+from typing import Any, Mapping
+from types import MappingProxyType
 from collections.abc import Callable, Iterable
 
 
@@ -48,11 +50,11 @@ class skb_provider:
         self.path = path if isinstance(path, Path) else Path(path)
         self.load_anims  = load_anims 
 
-    def provide(self, name:str, ret_path = False) -> SKB_File | tuple[SKB_File, Path]:
+    def provide(self, name:str):
         path = self.path / name
         if path.suffix.upper() == '.SKL': path = path.with_suffix('.SKB')
-        skb = sern_read.reader.read_all(path, SKB_File, self.load_anims, eof=self.load_anims)
-        return (skb, path) if ret_path else skb
+        skb:SKB_File = sern_read.reader.read_all(path, SKB_File, self.load_anims, eof=self.load_anims)
+        return skb
 
 @dataclass
 class bfm_collection_tree:
@@ -202,12 +204,48 @@ class bfm_linker:
 
 _BoneDict = dict[int, dict[float, list[int]]]
 
-@dataclass
-class _Armature: #TODO Rename to OrderedArmaure
+class BFMImportedBone(NamedTuple):
+    bpy_name:str
+    game_name:str
+    game_sym_name:str|None
+
+class BFMImportedArmature(NamedTuple):
     arm_obj: bpy.types.Object
-    bone_names: list[str] = field(init=False, default_factory=list)
-    def bone_name(self, ind:int): 
-        return self.bone_names[ind]
+    root_bone_name: str 
+    bones:tuple[BFMImportedBone,...] #in game order
+
+    @staticmethod
+    @_cache
+    def _build_bone_map(bones: tuple[BFMImportedBone, ...], kind: Literal['game', 'bpy']):
+        match kind:
+            case 'game': return {b.game_name: b for b in bones}
+            case 'bpy': return {b.bpy_name: b for b in bones}
+            case _: assert_never(kind)
+    def get_bone(self, name: str, kind:Literal['game', 'bpy'] = 'game'): return self._build_bone_map(self.bones, kind)[name]
+    def find_bone(self, name: str, kind:Literal['game', 'bpy'] = 'game'): return self._build_bone_map(self.bones, kind).get(name)
+
+    def bpy_bones(self)->bpy.types.ArmatureBones: return self.arm_obj.data.bones
+    def bpy_bones_pose(self): return self.arm_obj.pose.bones
+
+    def get_bpybone(self, name:str) :return self.bpy_bones()[name]
+    def get_root_bone(self): return self.get_bpybone(self.root_bone_name)
+    def get_bpybone_ind(self, ind:int): return self.get_bpybone(self.bones[ind].bpy_name)
+    
+    def get_bpybone_pose(self, name:str) :return self.bpy_bones_pose()[name]
+    def get_root_bpybone_pose(self): return self.get_bpybone_pose(self.root_bone_name)
+    def get_bpybone_ind_pose(self, ind:int): return self.get_bpybone_pose(self.bones[ind].bpy_name)
+
+    def find_bpybone(self, name:str) :return self.bpy_bones().get(name)
+    def find_bpybone_pose(self, name:str) :return self.bpy_bones_pose().get(name)
+
+
+
+class BFMImportedModel(NamedTuple):
+    bfm:BFM_File
+    skb: SKB_File
+    parent_collection: bpy.types.Collection
+    armature: BFMImportedArmature
+    sockets: Mapping[str, bpy.types.Object] 
 
 
 class bfm_builder:
@@ -220,13 +258,14 @@ class bfm_builder:
         return smb_builder.load_textures_only(pack, tex_prov)
 
     @staticmethod
-    def build_armature(name:str, trf:SpaceTransformer, bfm_bones:BFM_Bones, skb_bones:list[SKB_Bone]) -> _Armature:
+    def build_armature(name:str, trf:SpaceTransformer, bfm_bones:BFM_Bones, skb_bones:list[SKB_Bone]) -> BFMImportedArmature:
         #TODO сравнить количесвто костей
-        arm = bpy.data.armatures.new("Armature")    
-        ret_arm = _Armature(bpy.data.objects.new(name, arm))    
+        arm = bpy.data.armatures.new('Armature') 
+        arm_obj = bpy.data.objects.new(name, arm)
+        imported_bones:list[BFMImportedBone] =[]
         
-        bpy.context.scene.collection.objects.link(ret_arm.arm_obj)
-        bpy.context.view_layer.objects.active = ret_arm.arm_obj
+        bpy.context.scene.collection.objects.link(arm_obj)
+        bpy.context.view_layer.objects.active = arm_obj
         bpy.ops.object.mode_set(mode='EDIT')
         
         BONE_LENGTH = 0.3
@@ -237,7 +276,8 @@ class bfm_builder:
             if parent_ind>=i: raise ValueError("Bones was not sorted")
 
             #extra = f't:{bfm_bones.bone_type[i]}, c:{str(skb_bones[bfm_bones.child_ind[i]].name)}'
-            bpy_bone = arm.edit_bones.new(str(skb_bone.name))
+            skb_bone_name = str(skb_bone.name)
+            bpy_bone = arm.edit_bones.new(skb_bone_name)
             #bpy_bone.parent =  arm.edit_bones[parent_ind+1] if parent_ind!=-1 else None
             if parent_ind!=-1:
                 bpy_bone.parent = arm.edit_bones[parent_ind]
@@ -249,7 +289,7 @@ class bfm_builder:
             rot_mat = Matrix(skb_bone.matrix.rows)
             rot_mat = trf.conv_rest_bone_matrix(rot_mat)
 
-            pos = trf.conv_vec(Vector(bfm_bones.pos[i]))
+            pos = trf.conv_vec(Vector(bfm_bones.pos[i].xyz))
             #qw = [Vector(bfm_bones.unkown[i].a), Vector(bfm_bones.unkown[i].b)]
             #bpy_utils.create_bound_box(bfm_bones.unkown[i], matryyyyyMatrix.Translation(bpy_bone.head) @ qw)
             bpy_bone.length = BONE_LENGTH
@@ -258,20 +298,22 @@ class bfm_builder:
             #bpy_bone.use_connect=True
             #bpy_bone.head =  parent_head + Vector(bfm_bones.pos[i])
             #bpy_bone.tail = bpy_bone.head + Vector((0,0.2,0))
-            ret_arm.bone_names.append(bpy_bone.name)
+            sym_bone_name = str(skb_bones[skb_bone.symBone].name) if skb_bone.symBone!=-1 else None
+            imported_bones.append(BFMImportedBone(bpy_name=bpy_bone.name, game_name=skb_bone_name, game_sym_name=sym_bone_name))
         
         #TODO[Done] What if such a bone already exists inside skb_bones?
         #Create a fake bone for Root Motion to keep the Armature Object's transform unoccupied, allowing free manual positioning.
         root_bone = arm.edit_bones.new('root_bone')
+        root_bone_name = root_bone.name #Before switching to OBJECT mode
         root_bone.length = BONE_LENGTH
         root_bone.matrix = trf.get_rootbone_matrix().to_4x4()
         for bone in parents: bone.parent = root_bone
 
         bpy.ops.object.mode_set(mode='OBJECT')
-        return ret_arm
+        return BFMImportedArmature(arm_obj, root_bone_name, tuple(imported_bones))
 
     @staticmethod  
-    def build_mesh(name:str, trf:SpaceTransformer, geom:BFM_MeshGeometry, flags:MeshFlags, arm: _Armature) -> tuple[bpy.types.Mesh, _BoneDict]:
+    def build_mesh(name:str, trf:SpaceTransformer, geom:BFM_MeshGeometry, flags:MeshFlags, arm: BFMImportedArmature) -> tuple[bpy.types.Mesh, _BoneDict]:
         vertices = []
         bone_dict = {}
         for vi, bfm_vert in enumerate(geom.vertices):
@@ -280,7 +322,7 @@ class bfm_builder:
                 pos = trf.conv_vec(Vector(bfm_vert.weight_pos[n]))
                 bias = bfm_vert.biases[n]
                 bone_ind = bfm_vert.bone_indices[n]
-                bone = arm.arm_obj.data.bones.get(arm.bone_name(bone_ind))
+                bone = arm.get_bpybone_ind(bone_ind)
                 matr = Matrix.Translation(bone.head_local)
                 #matr = bone.matrix_local
                 #matr = qwe[bone_ind]
@@ -292,18 +334,18 @@ class bfm_builder:
         bpy_mesh.from_pydata(vertices, [], trf.flip_triangles(geom.triangles)) #TODO it's normal?  [(a,b,c) for a,b,c in geom.triangles]
 
         if MeshFlags.NORMALS in flags:
-            bpy_utils.add_normals(bpy_mesh, [trf.conv_vec(Vector(v.normal)) for v in geom.vertices])
+            bpy_utils.add_normals(bpy_mesh, [trf.conv_vec(Vector(v.normal.xyz)) for v in geom.vertices])
         if MeshFlags.UVs in flags:
-            bpy_utils.add_uv_coords(bpy_mesh, [Vector(v.uv) for v in geom.vertices])
+            bpy_utils.add_uv_coords(bpy_mesh, [Vector(v.uv.xy) for v in geom.vertices])
 
         bpy_mesh.update()
         bpy_mesh.shade_smooth()
         return bpy_mesh, bone_dict
     
     @staticmethod
-    def build_socket(trf:SpaceTransformer, socket:BFM_Socket, arm: _Armature):
+    def build_socket(trf:SpaceTransformer, socket:BFM_Socket, arm: BFMImportedArmature):
         socket_matrix = bpy_utils.Matrix(socket.matrix.rows + ((0,0,0,1),))
-        socket_bone = arm.arm_obj.data.bones[arm.bone_name(socket.bone)] #TODO may socket.bone==-1?
+        socket_bone = arm.get_bpybone_ind(socket.bone) #TODO may socket.bone==-1?
 
         bpy_socket = bpy.data.objects.new(str(socket.name), None)
 
@@ -316,16 +358,16 @@ class bfm_builder:
         return bpy_socket
 
     @staticmethod
-    def apply_armature(bpy_obj:bpy.types.Object, bone_dict:_BoneDict, arm:_Armature):
+    def apply_armature(bpy_obj:bpy.types.Object, bone_dict:_BoneDict, arm:BFMImportedArmature):
         bpy_arm_mod = bpy_obj.modifiers.new(name='Armature', type='ARMATURE')
         bpy_arm_mod.object = arm.arm_obj # type: ignore
         #TODO[done] set parent for arm_obj
         bpy_obj.parent = arm.arm_obj 
         bpy_obj.matrix_local = Matrix() 
         for bone_ind, wi_dict in bone_dict.items():
-            bpy_vg = bpy_obj.vertex_groups.new(name=arm.bone_name(bone_ind))
-            for wight, inds in wi_dict.items():
-                bpy_vg.add(inds, weight=wight, type='REPLACE')        
+            bpy_vg = bpy_obj.vertex_groups.new(name=arm.bones[bone_ind].bpy_name)
+            for weight, inds in wi_dict.items():
+                bpy_vg.add(inds, weight=weight, type='REPLACE')
         return bpy_obj
 
 @dataclass
@@ -348,7 +390,7 @@ class bfm_importer:
     def load(self, bfm: tuple[BFM_File, str] | BFM_File | Path | str):
         bfm, top_name =  smb_builder._generic_load(BFM_File, bfm)
         #jexplore.jprint(bfm, path=f'{top_name}.json')
-        skb:SKB_File = self.skb_prov.provide(str(bfm.header.skb_name)) #type: ignore
+        skb = self.skb_prov.provide(str(bfm.header.skb_name)) #type: ignore
         self.linker.new_container(top_name) #, (str(part.name) for part in bfm.parts)
 
         arm = bfm_builder.build_armature(top_name, self.trf, bfm.bones, skb.bones)
@@ -371,14 +413,17 @@ class bfm_importer:
             
             self.linker.link_child(bpy_obj, part_name)
 
+        builded_sockets:dict[str, bpy.types.Object] = {}
         if self.sockets:
             for socket in bfm.sockets:
                 bpy_socket = bfm_builder.build_socket(self.trf, socket, arm)
                 self.linker.link_category(bpy_socket, 'sockets')
+                assert str(socket.name) not in builded_sockets
+                builded_sockets[str(socket.name)] = bpy_socket
 
         bpy.context.view_layer.update()
-
-        return self.linker.end_container()
+        parent_collection = self.linker.end_container()
+        return BFMImportedModel(bfm, skb, parent_collection, arm, MappingProxyType(builded_sockets))
 
 #ZERBAT.BFM - летучая мыши. стоит обратить внимания на анимация, скорее всего они просты и подойдут для старта
 #ZGUEST_M.BFM, ZGUEST_F/M, UPANK, ZPUNK, ZPUNKF, LPUNK, FRANK_FEMALE, BOAR, GENERIC_F/M  - группировка по буквам?

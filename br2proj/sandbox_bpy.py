@@ -173,9 +173,9 @@ def _work2():
                     #ord_objs[i].name =  ord_objs[i].name+ord_objs[sm.animation.indices[i]].name
                 add_smb_animation(ord_objs[i], i, sm.animation, sm.header.fps)
 
-#The simplest is a function that logs to the root (obj, path)
+#The simplest is a function that logs to the root (obj, name)
 def jlog(*args): 
-    for i in range(0, len(args), 2): jexplore.jprint(args[i], path=args[i+1].name+'.json')
+    for i in range(0, len(args), 2): jexplore.jprint(args[i], path=args[i+1]+'.json')
 
 def _work(self:Operator):
     DO_LOGS = False
@@ -229,18 +229,18 @@ def _work(self:Operator):
         name_groups=True, create_materials=DO_TEXTURES, tex_prov=actual_tex_prov, anim_prov=smb_imp.smb_action_provider(),
     )
 
+    bfm_model = loader.load(bfm_path)
 
-    bfm:BFM_File = sern_read.reader.read_all(bfm_path, BFM_File)
-    skb, skb_path = skb_prov.provide(str(bfm.header.skb_name), True)
+    bfm:BFM_File = bfm_model.bfm
+    skb:SKB_File = bfm_model.skb
     ani:ANI_File = sern_read.reader.read_all(ani_path, ANI_File)
     ani_anim = ani_imp.Animation.from_ani(ani)
     if DO_LOGS: 
-        jlog(skb, skb_path, ani, ani_path)
+        jlog(skb, str(bfm.header.skb_name), ani, ani_path.name)
 
-    coll = loader.load((bfm, bfm_path.stem))
 
     if DO_SOCKETS:
-        sockets_collection = coll.children.get('sockets')
+        sockets_collection = bfm_model.parent_collection.children['sockets']
         socket_cache = {}
 
         def unlink_from_all_hierarchy(root_obj: bpy.types.Object):
@@ -267,7 +267,7 @@ def _work(self:Operator):
         
         for socket in bfm.sockets:
             socket_name = str(socket.name)
-            bpy_socket_emp = sockets_collection.objects.get(socket_name)
+            bpy_socket_emp = bfm_model.sockets[socket_name]
             assert bpy_socket_emp is not None
             socket_models = next((s[1] for s in SOCKET_ATTACHMENTS_DB if socket_name in s[0]), None)
             if socket_models is None: 
@@ -278,9 +278,7 @@ def _work(self:Operator):
             bpy_socket.parent = bpy_socket_emp
             bpy_socket.parent_type = 'OBJECT'
 
-    arm:bpy.types.Object = None
-    for obj in coll.objects:
-        if obj.type == 'ARMATURE': arm = obj
+    arm:bpy.types.Object = bfm_model.armature.arm_obj
 
     bpy.context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode='POSE')
@@ -319,11 +317,11 @@ def _work(self:Operator):
         bpy_bone.scale =  (mat.inverted() @ bpy_utils.Matrix.Diagonal( trf.conv_anim_scale(Vector(key.vec))) @ mat).to_scale()
         bpy_bone.keyframe_insert("scale", frame=key.frame+1)
     
-    root_bone = next(b for b in arm.pose.bones if b.parent is None) #Note. We assume the existence of root motion bone
+    root_bone = bfm_model.armature.get_root_bpybone_pose()
     #Tests for root motion: combo_jk, RUN_FORWARD, LOCKED_WALK_LEFT, POLE_JUMP
 
     for bone_name, bone in ani_anim.bones.items():
-        bpy_bone = arm.pose.bones[bone_name] if bone_name else root_bone
+        bpy_bone = bfm_model.armature.get_bpybone_pose(bone_name) if bone_name else root_bone
         for pos in bone.tracks.pos_track:
             add_pos(bpy_bone, pos)
         for rot in bone.tracks.rot_track:
