@@ -170,10 +170,13 @@ class smb_builder:
                 if not keyframes or not _smb_ani_float_eql(keyframes[-1].co.y, val):        
                     keyframes.insert(fdx, val, options={'FAST'})
         
-        world_quat = matr.to_quaternion().normalized() #TODO проблема с поворотом у PARK_CHIPPER_ANIM.SMB и WW_TRACKCRANE_ANIMATION1.SMB
+        world_quat = matr.to_quaternion().normalized() #TODO[Done] проблема с поворотом у PARK_CHIPPER_ANIM.SMB и WW_TRACKCRANE_ANIMATION1.SMB
+        prev_quat = None
         for frame_ind, frame in enumerate(ani.frames):
             transform = frame[obj_ind]
             quat = (world_quat @ Quaternion(transform.quat)).normalized()
+            if prev_quat: quat.make_compatible(prev_quat)
+            prev_quat = quat.copy()
             pos = matr @ Vector(transform.pos)
             frame_fdx = frame_ind * bpy.context.scene.render.fps / fps + 1
             add_component(fcurve_rot, frame_fdx, quat)

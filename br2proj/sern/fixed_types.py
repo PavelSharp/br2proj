@@ -75,6 +75,8 @@ class quaternion(c_float*4):
     def y(self): return self[2] 
     @property
     def z(self): return self[3]
+    @property
+    def wxyz(self): return self.w, self.x, self.y, self.z
 
 class triangle(c_uint16 * 3):
     @property

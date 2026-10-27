@@ -230,6 +230,7 @@ def _work(self:Operator):
     )
 
     bfm_model = loader.load(bfm_path)
+    bfm_armature = bfm_model.armature
 
     bfm:BFM_File = bfm_model.bfm
     skb:SKB_File = bfm_model.skb
@@ -240,7 +241,9 @@ def _work(self:Operator):
 
 
     if DO_SOCKETS:
-        sockets_collection = bfm_model.parent_collection.children['sockets']
+        sockets_collection = bpy.data.collections.new('sockets') #bfm_model.parent_collection.children['sockets']
+        sockets_collection.color_tag = 'COLOR_01'
+        bpy_utils.link_to_collection(sockets_collection, bfm_model.parent_collection)
         socket_cache = {}
 
         def unlink_from_all_hierarchy(root_obj: bpy.types.Object):
@@ -267,18 +270,21 @@ def _work(self:Operator):
         
         for socket in bfm.sockets:
             socket_name = str(socket.name)
-            bpy_socket_emp = bfm_model.sockets[socket_name]
-            assert bpy_socket_emp is not None
+            bpy_socket_bone = bfm_armature.bpy_bones_pose[bfm_armature.bone_map[socket_name].bpy_name]
             socket_models = next((s[1] for s in SOCKET_ATTACHMENTS_DB if socket_name in s[0]), None)
             if socket_models is None: 
                 print(f'WARN: ATTACHMENT MODEL NOT FOUND, SOCKET: {socket_name}'); continue
             socket_model = socket_models[socki % len(socket_models)]
             socket_path = models_path / (socket_model + '.SMB')
             bpy_socket = load_socket_cache(socket_path)#socket_loader.load(socket_path)
-            bpy_socket.parent = bpy_socket_emp
-            bpy_socket.parent_type = 'OBJECT'
 
-    arm:bpy.types.Object = bfm_model.armature.arm_obj
+            bpy_socket.parent = bfm_armature.arm_obj
+            bpy_socket.parent_type = 'BONE'
+            bpy_socket.parent_bone = bpy_socket_bone.name
+            bpy_socket.matrix_parent_inverse = bpy_utils.Matrix.Translation((0, -bpy_socket_bone.length, 0))
+
+
+    arm:bpy.types.Object = bfm_armature.arm_obj
 
     bpy.context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode='POSE')
@@ -317,11 +323,11 @@ def _work(self:Operator):
         bpy_bone.scale =  (mat.inverted() @ bpy_utils.Matrix.Diagonal( trf.conv_anim_scale(Vector(key.vec))) @ mat).to_scale()
         bpy_bone.keyframe_insert("scale", frame=key.frame+1)
     
-    root_bone = bfm_model.armature.get_root_bpybone_pose()
+    root_bone = bfm_armature.bpy_bones_pose[bfm_armature.root_bone_name]
     #Tests for root motion: combo_jk, RUN_FORWARD, LOCKED_WALK_LEFT, POLE_JUMP
 
     for bone_name, bone in ani_anim.bones.items():
-        bpy_bone = bfm_model.armature.get_bpybone_pose(bone_name) if bone_name else root_bone
+        bpy_bone = bfm_armature.bpy_bones_pose[bone_name] if bone_name else root_bone
         for pos in bone.tracks.pos_track:
             add_pos(bpy_bone, pos)
         for rot in bone.tracks.rot_track:
